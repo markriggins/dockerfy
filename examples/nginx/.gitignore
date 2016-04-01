@@ -1,0 +1,5 @@
+*.gz
+*.o
+*.a
+zombie-maker
+zombie-maker-debian-binary
