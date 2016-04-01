@@ -1,9 +1,22 @@
-dockerfy ![version v0.2.0](https://img.shields.io/badge/version-v0.2.0-brightgreen.svg) ![License MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+dockerfy 
 =============
 
-Utility to simplify running applications in docker containers.
+##Utility to initialize docker containers with
 
-dockerfy is a utility to simplify running applications in docker containers.  It allows you
+	1 -- Overlays of alternative content 
+	2 -- Templates for configuration and content
+	3 -- Environment Variable substitutions into templates and overlays
+	4 -- Secrets injected into configuration files
+	5 -- Wait for dependencies
+	6 -- Tail log files
+
+##And to control runtime
+	1 -- Start Services
+	2 -- Run commands before the primary command begins
+	3 -- Reap Zombies
+
+
+dockerfy is a utility to simplify running applications in docker containers base  It allows you
 to generate application configuration files at container startup time from templates and
 container environment variables.  It also allows log files to be tailed to stdout and/or
 stderr.
@@ -29,13 +42,13 @@ See [A Simple Way To Dockerfy Applications](http://jasonwilder.com/blog/2014/10/
 
 Download the latest version in your container:
 
-* [linux/amd64](https://github.com/jwilder/dockerfy/releases/download/v0.2.0/dockerfy-linux-amd64-v0.2.0.tar.gz)
+* [linux/amd64](https://github.com/markriggins/dockerfy/releases/download/v0.2.0/dockerfy-linux-amd64-v0.2.0.tar.gz)
 
 For Ubuntu Images:
 
 ```
 RUN apt-get update && apt-get install -y wget
-RUN wget https://github.com/jwilder/dockerfy/releases/download/v0.2.0/dockerfy-linux-amd64-v0.2.0.tar.gz
+RUN wget https://github.com/markriggins/dockerfy/releases/download/v0.2.0/dockerfy-linux-amd64-v0.2.0.tar.gz
 RUN tar -C /usr/local/bin -xzvf dockerfy-linux-amd64-v0.2.0.tar.gz
 ```
 
