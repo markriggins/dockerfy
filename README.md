@@ -1,7 +1,19 @@
 dockerfy ![version v0.2.0](https://img.shields.io/badge/version-v0.2.0-brightgreen.svg) ![License MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 =============
 
-Utility to simplify running applications in docker containers.
+Utility to initialize docker containers with
+
+1 -- Overlays of alternative content 
+2 -- Templates for configuration and content
+3 -- Environment Variable substitutions into templates and overlays
+4 -- Secrets injected into configuration files
+5 -- Wait for dependencies
+
+And to control runtime
+1 -- Start Services
+2 -- Run commands before the primary command begins
+3 -- Reap Zombies
+
 
 dockerfy is a utility to simplify running applications in docker containers.  It allows you
 to generate application configuration files at container startup time from templates and
