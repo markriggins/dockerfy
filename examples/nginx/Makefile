@@ -20,6 +20,7 @@ stop:
 run-staging: stop
 	docker run -d -p 80:80 -e DEPLOYMENT_ENV=staging --name dockerfied-nginx dockerfied-nginx \
 		     -overlay /tmp/overlays/_common/html:/usr/share/nginx/ \
+		     -overlay /tmp/overlays/MISSING/html:/usr/share/nginx/ \
 	         -overlay "/tmp/overlays/{{ .Env.DEPLOYMENT_ENV }}/html:/usr/share/nginx/" \
 	         -- nginx
 	open http://$(shell docker-machine ip $(shell docker-machine active))/robots.txt
@@ -43,7 +44,7 @@ run-prod-secrets: stop
 					-overlay /tmp/overlays/_common/html:/usr/share/nginx/ \
 					-overlay "/tmp/overlays/{{ .Env.DEPLOYMENT_ENV }}/html:/usr/share/nginx/" \
 					-template "/secrets/secrets.html.tmpl:/usr/share/nginx/html/secrets.html" \
-			        -secrets /secrets/secrets.env -- nginx 
+ 			        -secrets /secrets/secrets.env -- nginx 
 	open http://$(shell docker-machine ip $(shell docker-machine active))/secrets.html
 
 

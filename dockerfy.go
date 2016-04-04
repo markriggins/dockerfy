@@ -32,7 +32,7 @@ var (
 	reapPollIntervalFlag time.Duration
 	reapFlag             bool
 	runsFlag             sliceVar
-	secretsFlag          sliceVar
+	secretsFlag          string
 	startsFlag           sliceVar
 	stderrTailFlag       sliceVar
 	stdoutTailFlag       sliceVar
@@ -111,7 +111,7 @@ func main() {
 	flag.BoolVar(&logPollFlag, "log-poll", false, "use polling to tail log files")
 	flag.Var(&templatesFlag, "template", "Template (/template:/dest). Can be passed multiple times")
 	flag.Var(&overlaysFlag, "overlay", "overlay (/src:/dest). Can be passed multiple times")
-	flag.Var(&secretsFlag, "secrets", "secrets (path to secrets.env file). Can be passed multiple times")
+	flag.StringVar(&secretsFlag, "secrets", "", "secrets (path to secrets.env file)")
 	flag.Var(&runsFlag, "run", "run (cmd [opts] [args] --) Can be passed multiple times")
 	flag.Var(&startsFlag, "start", "start (cmd [opts] [args] --) Can be passed multiple times")
 	flag.BoolVar(&reapFlag, "reap", false, "reap all child processes")
@@ -155,6 +155,10 @@ func main() {
 			}
 			src, dest := string_template_eval(parts[0]), string_template_eval(parts[1])
 
+			if _, err := os.Stat(src); os.IsNotExist(err) {
+				log.Printf("overlay source: %s does not exist.  Skipping", src)
+				continue
+			}
 			log.Printf("overlaying %s --> %s", src, dest)
 
 			cmd := exec.Command("cp", "-rv", src, dest)

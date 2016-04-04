@@ -32,43 +32,56 @@ func (c *TemplateContext) Env() map[string]string {
 	return c.env
 }
 
+//
+// Make secrets available under .Secret.VARNAME in the TemplateContext
+//
 func (c *TemplateContext) Secret() map[string]string {
 	if c.secrets != nil {
 		return c.secrets
 	}
 	c.secrets = make(map[string]string)
 
-	for _, secretsFileName := range secretsFlag {
-		secretsFile, err := os.Open(secretsFileName)
-		if err != nil {
-			log.Fatalf("Error opening secrets file '%s':%s", secretsFileName, err)
-		}
-		defer secretsFile.Close()
-		bSecretsFile := bufio.NewReader(secretsFile)
-
-		for {
-			line_bytes, isPrefix, err := bSecretsFile.ReadLine()
-			line := string(line_bytes)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				log.Fatalf("Error reading secrets file '%s':%s", secretsFileName, err)
-			}
-			if isPrefix {
-				log.Fatal("Error secrets file too long: ", secretsFileName)
-			}
-			if strings.HasPrefix(line, "#") {
-				continue
-			}
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) < 2 {
-				continue
-			}
-			key, value := parts[0], strings.Trim(strings.TrimSpace(parts[1]), `'"`)
-			c.secrets[key] = value
-		}
+	// Secrets can come from (in order of precedence):
+	// 1) -secrets <file>
+	// 2) $SECRETS_FILE
+	secretsFileName := secretsFlag
+	if secretsFileName == "" {
+		secretsFileName = os.Getenv("SECRETS_FILE")
 	}
+	if secretsFileName == "" {
+		return c.secrets
+	}
+
+	secretsFile, err := os.Open(secretsFileName)
+	if err != nil {
+		log.Fatalf("Error opening secrets file '%s':%s", secretsFileName, err)
+	}
+	defer secretsFile.Close()
+	bSecretsFile := bufio.NewReader(secretsFile)
+
+	for {
+		line_bytes, isPrefix, err := bSecretsFile.ReadLine()
+		line := string(line_bytes)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatalf("Error reading secrets file '%s':%s", secretsFileName, err)
+		}
+		if isPrefix {
+			log.Fatal("Error secrets file too long: ", secretsFileName)
+		}
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		key, value := parts[0], strings.Trim(strings.TrimSpace(parts[1]), `'"`)
+		c.secrets[key] = value
+	}
+
 	return c.secrets
 }
 
