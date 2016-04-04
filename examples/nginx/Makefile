@@ -57,11 +57,27 @@ run-zombie-test:
 	@echo "\nRunning Zombie Test -- expect 10 zombies to get reaped"
 	@echo "--------------------------------------------------------------------------"
 	@docker rm -f dockerfied-nginx 2>/dev/null || true
-	docker run -d --name dockerfied-nginx dockerfied-nginx -verbose -reap \
-		-run zombie-maker 10 2 -- \
-		sleep 20 >/dev/null
+	@echo "\nRun zombie-maker inside dockerfied-nginx"
+	@echo "--------------------------------------------------------------------------"
+	docker run -d --name dockerfied-nginx dockerfied-nginx -verbose -reap -reap-poll-interval 2s \
+		-run zombie-maker 10 1 -- \
+		-run sleep 3 -- \
+		-run ps -ef -- \
+		sleep 120 >/dev/null
 	@sleep 5
-	docker logs dockerfied-nginx
+	@echo "\nPs -ef looking initial zombies"
+	@echo "--------------------------------------------------------------------------"
+	@docker exec dockerfied-nginx ps -ef | egrep defunct
+	
+	@sleep 5
+	@echo "\nPs -ef looking for leftover zombies -- should be empty"
+	@echo "--------------------------------------------------------------------------"
+	@docker exec dockerfied-nginx ps -ef | egrep defunct || true
+
+	@docker logs dockerfied-nginx 2>&1| egrep -q 'Reaped 10 zombies' || (echo FAILED TO REAP; exit 1)
+
+	@echo "run-zombie-test PASSED"
+	@docker rm -f dockerfied-nginx 2>/dev/null || true
 
 
 run-service-stops-too-soon-test: 

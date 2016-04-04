@@ -22,13 +22,13 @@ EXPOSE 80
 ENV DEPLOYMENT_ENV=staging
 
 #  NOTE: These options do not work well on virtualbox osx -- it pegs one CPU
-#     "-poll", \
+#     "-log-poll", \
 #     "-stdout", "/var/log/nginx/access.log", \
 #     "-stderr", "/var/log/nginx/error.log", \
 
 ENTRYPOINT [ "dockerfy", \
      "-template", "/etc/nginx/conf.d/default.conf.tmpl:/etc/nginx/conf.d/default.conf", \
-     "-poll", \
+     "-log-poll", \
      "-stdout", "/var/log/nginx/access.log", \
      "-stderr", "/var/log/nginx/error.log" ]
 

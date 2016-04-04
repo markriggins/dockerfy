@@ -18,26 +18,29 @@ type hostFlagsVar []string
 
 var (
 	buildVersion string
-	version      bool
-	poll         bool
+	cancel       context.CancelFunc
+	ctx          context.Context
+	delims       []string
 	wg           sync.WaitGroup
+)
 
-	templatesFlag   sliceVar
-	stdoutTailFlag  sliceVar
-	stderrTailFlag  sliceVar
-	overlaysFlag    sliceVar
-	secretsFlag     sliceVar
-	startsFlag      sliceVar
-	runsFlag        sliceVar
-	reapFlag        bool
-	verboseFlag     bool
-	delimsFlag      string
-	delims          []string
-	waitFlag        hostFlagsVar
-	waitTimeoutFlag time.Duration
-
-	ctx    context.Context
-	cancel context.CancelFunc
+// Flags
+var (
+	delimsFlag           string
+	overlaysFlag         sliceVar
+	logPollFlag          bool
+	reapPollIntervalFlag time.Duration
+	reapFlag             bool
+	runsFlag             sliceVar
+	secretsFlag          sliceVar
+	startsFlag           sliceVar
+	stderrTailFlag       sliceVar
+	stdoutTailFlag       sliceVar
+	templatesFlag        sliceVar
+	verboseFlag          bool
+	versionFlag          bool
+	waitFlag             hostFlagsVar
+	waitTimeoutFlag      time.Duration
 )
 
 func (i *hostFlagsVar) String() string {
@@ -102,8 +105,10 @@ Arguments:
 
 func main() {
 
-	flag.BoolVar(&version, "version", false, "show version")
-	flag.BoolVar(&poll, "poll", false, "enable polling")
+	log.SetPrefix("dockerfy: ")
+
+	flag.BoolVar(&versionFlag, "version", false, "show version")
+	flag.BoolVar(&logPollFlag, "log-poll", false, "use polling to tail log files")
 	flag.Var(&templatesFlag, "template", "Template (/template:/dest). Can be passed multiple times")
 	flag.Var(&overlaysFlag, "overlay", "overlay (/src:/dest). Can be passed multiple times")
 	flag.Var(&secretsFlag, "secrets", "secrets (path to secrets.env file). Can be passed multiple times")
@@ -116,6 +121,7 @@ func main() {
 	flag.StringVar(&delimsFlag, "delims", "", `template tag delimiters. default "{{":"}}" `)
 	flag.Var(&waitFlag, "wait", "Host (tcp/tcp4/tcp6/http/https) to wait for before this container starts. Can be passed multiple times. e.g. tcp://db:5432")
 	flag.DurationVar(&waitTimeoutFlag, "timeout", 10*time.Second, "Host wait timeout")
+	flag.DurationVar(&reapPollIntervalFlag, "reap-poll-interval", 120*time.Second, "Polling interval for reaping zombies")
 
 	var startCmds = removeCmdFromOsArgs("start")
 	var runCmds = removeCmdFromOsArgs("run")
@@ -123,7 +129,7 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
-	if version {
+	if versionFlag {
 		fmt.Println(buildVersion)
 		return
 	}
@@ -175,15 +181,16 @@ func main() {
 
 	// Setup context
 	ctx, cancel = context.WithCancel(context.Background())
+	doneReapingCh := make(chan bool)
 
 	for _, out := range stdoutTailFlag {
 		wg.Add(1)
-		go tailFile(ctx, out, poll, os.Stdout)
+		go tailFile(ctx, out, logPollFlag, os.Stdout)
 	}
 
 	for _, err := range stderrTailFlag {
 		wg.Add(1)
-		go tailFile(ctx, err, poll, os.Stderr)
+		go tailFile(ctx, err, logPollFlag, os.Stderr)
 	}
 
 	// Process -start and -run flags
@@ -206,6 +213,8 @@ func main() {
 		log.Printf("Running Primary Command: `%s`\n", cmdString)
 		wg.Add(1)
 		go runCmd(ctx, func() {
+			doneReapingCh <- true
+			close(doneReapingCh)
 			log.Fatalf("Primary Command `%s` stopped", cmdString)
 			os.Exit(1)
 			panic("couldn't exit")
@@ -213,8 +222,13 @@ func main() {
 	}
 
 	if reapFlag {
-		go ReapChildren()
+		go ReapChildren(doneReapingCh, reapPollIntervalFlag)
 	}
 
 	wg.Wait()
+	if reapFlag {
+		doneReapingCh <- true
+		close(doneReapingCh)
+	}
+
 }

@@ -1,2 +1,3 @@
 *.gz
 dist/*
+.DS_Store
