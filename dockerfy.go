@@ -81,7 +81,7 @@ Arguments:
 	println(`
        dockerfy -template nginx.tmpl:/etc/nginx/nginx.conf \
    	     -overlay overlays/_common/html:/usr/share/nginx/ \
-   	     -overlay overlays/{{ .Env.DEPLOYMENT_ENV }}/html:/usr/share/nginx/ \`)
+   	     -overlay overlays/$DEPLOYMENT_ENV/html:/usr/share/nginx/ \`)
 	println(`   	     -stdout /var/log/nginx/access.log \
              -stderr /var/log/nginx/error.log \
              -wait tcp://web:8000 nginx \
@@ -153,7 +153,7 @@ func main() {
 			if len(parts) != 2 {
 				log.Fatalf("bad overlay argument: '%s'. expected \"/src:/dest\"", o)
 			}
-			src, dest := string_template_eval(parts[0]), string_template_eval(parts[1])
+			src, dest := os.ExpandEnv(string_template_eval(parts[0])), os.ExpandEnv(string_template_eval(parts[1]))
 
 			if _, err := os.Stat(src); os.IsNotExist(err) {
 				log.Printf("overlay source: %s does not exist.  Skipping", src)
@@ -176,7 +176,7 @@ func main() {
 			if len(parts) != 2 {
 				log.Fatalf("bad template argument: %s. expected \"/template:/dest\"", t)
 			}
-			template, dest = string_template_eval(parts[0]), string_template_eval(parts[1])
+			template, dest = os.ExpandEnv(string_template_eval(parts[0])), os.ExpandEnv(string_template_eval(parts[1]))
 		}
 		generateFile(template, dest)
 	}

@@ -86,11 +86,14 @@ $ dockerfy -template template1.tmpl
 
 You can overlay files onto the container at runtime by passing `-overlay` multiple times.   The argument uses a form similar to the `--volume` option of the `docker run` command:  `source:dest`.   Overlays are applied recursively onto the destination in a similar manner to `cp -rv`.   If multiple overlays are specified, they are applied in the order in which they were listed on the command line.  
 
-Overlays are used to replace entire sets of files with alternative content, whereas templates allow environment substitutions into a single file.  The example below assumes that /tmp/overlays has already been COPY'd into the image by the Dockerfile.
+Overlays are used to replace entire sets of files with alternative content, whereas templates allow environment substitutions into a single file.  The example below assumes that /tmp/overlays has already been COPY'd into the image by the Dockerfile.   NOTE: that unexpanded environment variables such as $DEPLOYMENT_ENV below will be expanded to their values by **dockerfy** if they appear in the arguments, and go templates can be used to substitute environment variables.
 
 ```
 $ dockerfy  -overlay "/tmp/overlays/_common/html:/usr/share/nginx/" \
-             -overlay "/tmp/overlays/{{ .Env.DEPLOYMENT_ENV }}/html:/usr/share/nginx/"
+             -overlay '/tmp/overlays/$DEPLOYMENT_ENV/html:/usr/share/nginx/'
+
+$ dockerfy  -overlay "/tmp/overlays/_common/html:/usr/share/nginx/" \
+             -overlay "/tmp/overlays/{{.Env.DEPLOYMENT_ENV}}/html:/usr/share/nginx/"
 ```
 
 You can tail multiple files to `STDOUT` and `STDERR` by passing the options multiple times.
