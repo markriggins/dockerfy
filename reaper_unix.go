@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"time"
 
+	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
 )
 
@@ -17,13 +18,14 @@ import (
 //       we will ultimately inherit all orphaned grandchildren.
 //
 
-func _receiveSignals(doneCh <-chan bool) {
+func _receiveSignals(ctx context.Context) {
+	defer wg.Done()
 	var signalsCh = make(chan os.Signal, 3)
 	signal.Notify(signalsCh, unix.SIGCHLD)
 
 	for {
 		select {
-		case <-doneCh:
+		case <-ctx.Done():
 			return
 		case <-signalsCh:
 			log.Println("Reaper: received a SIGCHLD")
@@ -35,15 +37,17 @@ func _receiveSignals(doneCh <-chan bool) {
 // Reap all child processes by receiving their signals and
 // waiting for their exit status
 //
-func ReapChildren(doneCh <-chan bool, pollInterval time.Duration) {
+func ReapChildren(ctx context.Context, pollInterval time.Duration) {
+	defer wg.Done()
+
 	if os.Getpid() == 1 {
 		log.Println("Reaper: init process reaper started")
 	} else {
 		log.Println("Reaper: started")
 	}
 
-	doneReceivingSignalsCh := make(chan bool)
-	go _receiveSignals(doneReceivingSignalsCh)
+	wg.Add(1)
+	go _receiveSignals(ctx)
 
 	if verboseFlag {
 		log.Printf("Reaper: Polling every: %v", pollInterval)
@@ -54,9 +58,7 @@ func ReapChildren(doneCh <-chan bool, pollInterval time.Duration) {
 		// Blocking on Wait4 may affect other child processes that are also trying to exec
 		// and wait for their own children.  So we do this sparsely and intermittantly instead.
 		select {
-		case <-doneCh:
-			doneReceivingSignalsCh <- true
-			close(doneReceivingSignalsCh)
+		case <-ctx.Done():
 			log.Printf("Reaper: Done")
 			return
 		case <-time.After(pollInterval):
@@ -66,7 +68,7 @@ func ReapChildren(doneCh <-chan bool, pollInterval time.Duration) {
 		// Reap all zombie's that we have inherited (at this time)
 		var zombiesReaped = 0
 		{
-		WaitLoop:
+		NonBlockingReaperLoop: // No blocking operations allowed in this loop
 			for {
 				var status unix.WaitStatus
 				pid, err := unix.Wait4(-1, &status, unix.WNOHANG, nil)
@@ -78,14 +80,14 @@ func ReapChildren(doneCh <-chan bool, pollInterval time.Duration) {
 						// Killed one Zombie -- look for another
 					} else {
 						// Try again later
-						break WaitLoop
+						break NonBlockingReaperLoop
 					}
 				case unix.ECHILD:
 					if verboseFlag {
 						log.Println("Reaper: No more children at this time")
 					}
 					// No more zombies at this time, try again later
-					break WaitLoop
+					break NonBlockingReaperLoop
 				case unix.EINTR:
 					if verboseFlag {
 						log.Println("Reaper: Interrupted")
@@ -96,7 +98,7 @@ func ReapChildren(doneCh <-chan bool, pollInterval time.Duration) {
 						log.Println("Reaper: Unexpected error", err)
 					}
 					// Unexpected err, log it and try again later
-					break WaitLoop
+					break NonBlockingReaperLoop
 				}
 			}
 		}

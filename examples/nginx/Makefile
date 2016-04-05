@@ -40,11 +40,12 @@ run-proxy-amazon: stop
 run-prod-secrets: stop
 	docker run -d -p 80:80 -e DEPLOYMENT_ENV=prod --name dockerfied-nginx \
 				-v $(PWD):/secrets \
+				-e SECRETS_FILE=/secrets/secrets.env \
 				dockerfied-nginx \
 					-overlay /tmp/overlays/_common/html:/usr/share/nginx/ \
 					-overlay "/tmp/overlays/{{ .Env.DEPLOYMENT_ENV }}/html:/usr/share/nginx/" \
 					-template "/secrets/secrets.html.tmpl:/usr/share/nginx/html/secrets.html" \
- 			        -secrets /secrets/secrets.env -- nginx 
+ 			        -- nginx 
 	open http://$(shell docker-machine ip $(shell docker-machine active))/secrets.html
 
 
@@ -74,6 +75,10 @@ run-zombie-test:
 	@echo "\nPs -ef looking for leftover zombies -- should be empty"
 	@echo "--------------------------------------------------------------------------"
 	@docker exec dockerfied-nginx ps -ef | egrep defunct || true
+
+	@echo "\nLogs"
+	@echo "--------------------------------------------------------------------------"
+	@docker logs dockerfied-nginx 
 
 	@docker logs dockerfied-nginx 2>&1| egrep -q 'Reaped 10 zombies' || (echo FAILED TO REAP; exit 1)
 
@@ -106,4 +111,17 @@ run-primary-stops-while-service-is-running-test:
 	@sleep 7
 	docker logs dockerfied-nginx
 	
+
+run-before-primary-test:
+	@echo "\nrun-before-primary-test:"
+	@echo "\tBefore the service starts, the -run commands should finish in order"
+	@echo "--------------------------------------------------------------------------"
+	@docker rm -f dockerfied-nginx 2>/dev/null || true
+	docker run -d -it --name dockerfied-nginx dockerfied-nginx -verbose \
+		-run bash -c 'sleep 3; echo "1 DONE"' -- \
+		-run bash -c 'sleep 2; echo "2 DONE"' -- \
+		-run bash -c 'echo "3 DONE"' -- \
+		bash -c "sleep 4; echo '4 PRIMARY COMMAND DONE'"
+	@sleep 15
+	docker logs dockerfied-nginx 2>&1 | egrep '^[0-9].*DONE' 
 

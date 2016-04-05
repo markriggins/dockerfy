@@ -185,30 +185,31 @@ func main() {
 
 	// Setup context
 	ctx, cancel = context.WithCancel(context.Background())
-	doneReapingCh := make(chan bool)
 
-	for _, out := range stdoutTailFlag {
+	for _, logFile := range stdoutTailFlag {
 		wg.Add(1)
-		go tailFile(ctx, out, logPollFlag, os.Stdout)
+		go tailFile(ctx, cancel, logFile, logPollFlag, os.Stdout)
 	}
 
-	for _, err := range stderrTailFlag {
+	for _, logFile := range stderrTailFlag {
 		wg.Add(1)
-		go tailFile(ctx, err, logPollFlag, os.Stderr)
+		go tailFile(ctx, cancel, logFile, logPollFlag, os.Stderr)
 	}
 
 	// Process -start and -run flags
 	for _, cmd := range runCmds {
+
 		log.Printf("Pre-Running: `%s`\n", toString(cmd))
 		wg.Add(1)
-		go runCmd(ctx, cancel, cmd.Path, cmd.Args[1:]...)
-		wg.Wait()
+		// Run in the foreground
+		runCmd(ctx, cancel, cmd.Path, cmd.Args[1:]...)
 	}
 	for _, cmd := range startCmds {
 		log.Printf("Starting Service: `%s`\n", toString(cmd))
 		wg.Add(1)
 		go runCmd(ctx, func() {
-			log.Fatalf("Service `%s` stopped", toString(cmd))
+			log.Printf("Service `%s` stopped\n", toString(cmd))
+			cancel()
 		}, cmd.Path, cmd.Args[1:]...)
 	}
 
@@ -217,22 +218,16 @@ func main() {
 		log.Printf("Running Primary Command: `%s`\n", cmdString)
 		wg.Add(1)
 		go runCmd(ctx, func() {
-			doneReapingCh <- true
-			close(doneReapingCh)
-			log.Fatalf("Primary Command `%s` stopped", cmdString)
-			os.Exit(1)
-			panic("couldn't exit")
+			log.Printf("Primary Command `%s` stopped\n", cmdString)
+			cancel()
 		}, flag.Arg(0), flag.Args()[1:]...)
 	}
 
 	if reapFlag {
-		go ReapChildren(doneReapingCh, reapPollIntervalFlag)
+		wg.Add(1)
+		go ReapChildren(ctx, reapPollIntervalFlag)
 	}
 
 	wg.Wait()
-	if reapFlag {
-		doneReapingCh <- true
-		close(doneReapingCh)
-	}
 
 }

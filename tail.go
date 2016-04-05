@@ -9,18 +9,27 @@ import (
 	"golang.org/x/net/context"
 )
 
-func tailFile(ctx context.Context, file string, poll bool, dest *os.File) {
+func tailFile(ctx context.Context, cancel context.CancelFunc, fileName string, poll bool, dest *os.File) {
 	defer wg.Done()
-	t, err := tail.TailFile(file, tail.Config{
+
+	// Make sure we can read it -- apparently tail.TailFile does not complain if the file does not exist!!
+	_file, err := os.Open(fileName)
+	if err != nil {
+		log.Printf("Error opening '%s':%s\n", fileName, err)
+		cancel()
+	}
+	_file.Close()
+
+	t, err := tail.TailFile(fileName, tail.Config{
 		Follow: true,
 		ReOpen: true,
 		Poll:   poll,
 		Logger: tail.DiscardingLogger,
 	})
 	if err != nil {
-		log.Fatalf("unable to tail %s: %s", "foo", err)
+		log.Printf("unable to tail %s: %s\n", fileName, err)
+		cancel()
 	}
-
 	// main loop
 	for {
 		select {

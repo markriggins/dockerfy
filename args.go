@@ -16,7 +16,6 @@ func removeCmdFromOsArgs(flag string) []*exec.Cmd {
 	var newOsArgs = []string{}
 	var cmd *exec.Cmd
 	var cmds = []*exec.Cmd{}
-	_ = "breakpoint"
 
 	for i := 0; i < len(os.Args); i++ {
 

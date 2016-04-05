@@ -14,7 +14,6 @@ import (
 func runCmd(ctx context.Context, cancel context.CancelFunc, cmd string, args ...string) {
 	defer wg.Done()
 
-	_ = "breakpoint"
 	process := exec.Command(cmd, args...)
 	process.Stdin = os.Stdin
 	process.Stdout = os.Stdout
@@ -26,7 +25,7 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd string, args ...
 		log.Fatalf("Error starting command: `%s` - %s\n", toString(process), err)
 	}
 
-	// Setup signaling
+	// Setup signaling -- a separate channel for goroutine for each command
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)
 
@@ -38,23 +37,27 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd string, args ...
 		case sig := <-sigs:
 			log.Printf("Received signal: %s\n", sig)
 			signalProcessWithTimeout(process, sig)
-			cancel()
+			if cancel != nil {
+				cancel()
+			}
 		case <-ctx.Done():
+			log.Printf("Done waiting for signals")
 			// exit when context is done
 		}
 	}()
 
 	err = process.Wait()
-	cancel()
 
 	if err == nil {
 		log.Println("Command finished successfully: " + toString(process))
 	} else {
 		log.Printf("Command `%s` exited with error: %s\n", toString(process), err)
+		if cancel != nil {
+			cancel()
+		}
 		// OPTIMIZE: This could be cleaner
-		os.Exit(err.(*exec.ExitError).Sys().(syscall.WaitStatus).ExitStatus())
+		// os.Exit(err.(*exec.ExitError).Sys().(syscall.WaitStatus).ExitStatus())
 	}
-
 }
 
 func signalProcessWithTimeout(process *exec.Cmd, sig os.Signal) {
