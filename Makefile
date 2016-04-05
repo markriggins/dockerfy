@@ -1,7 +1,6 @@
 .PHONY : dockerfy dist-clean dist release zombie-maker
 
 TAG:=`git describe --abbrev=0 --tags`
-YTAG:=`git describe --abbrev=0 --tags | cut -d. -f1,2`
 LDFLAGS:=-X main.buildVersion=$(TAG)
 DOLLAR='$'
 
@@ -22,10 +21,5 @@ dist: dist-clean
 
 release: 
 	tar -czf dist/release/dockerfy-linux-amd64-$(TAG).tar.gz -C dist/linux/amd64 dockerfy ; \
-	cp -vf dist/release/dockerfy-linux-amd64-$(TAG).tar.gz dist/release/dockerfy-linux-amd64-$(YTAG).tar.gz ; \
-
 	tar -czf dist/release/dockerfy-linux-armel-$(TAG).tar.gz -C dist/linux/armel dockerfy ; \
-	cp -vf dist/release/dockerfy-linux-armel-$(TAG).tar.gz dist/release/dockerfy-linux-armel-$(YTAG).tar.gz ; \
-	
 	tar -czf dist/release/dockerfy-linux-armhf-$(TAG).tar.gz -C dist/linux/armhf dockerfy ; \
-	cp -vf dist/release/dockerfy-linux-armhf-$(TAG).tar.gz dist/release/dockerfy-linux-armhf-$(YTAG).tar.gz ; \
