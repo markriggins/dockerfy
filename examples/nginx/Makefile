@@ -42,7 +42,7 @@ run-prod-secrets: stop
 				-v $(PWD):/secrets \
 				-e SECRETS_FILE=/secrets/secrets.env \
 				dockerfied-nginx \
-					-overlay /tmp/overlays/_common/html:/usr/share/nginx/ \
+					-overlay /tmp/overlays/_common/:/usr/share/nginx/ \
 					-overlay '/tmp/overlays/{{ .Env.DEPLOYMENT_ENV }}/html:/usr/share/nginx/' \
 					-template '/secrets/secrets.html.tmpl:/usr/share/nginx/html/secrets.html' \
  			        -- nginx 

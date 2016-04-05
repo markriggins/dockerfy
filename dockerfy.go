@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -154,17 +155,27 @@ func main() {
 				log.Fatalf("bad overlay argument: '%s'. expected \"/src:/dest\"", o)
 			}
 			src, dest := os.ExpandEnv(string_template_eval(parts[0])), os.ExpandEnv(string_template_eval(parts[1]))
-
 			if _, err := os.Stat(src); os.IsNotExist(err) {
 				log.Printf("overlay source: %s does not exist.  Skipping", src)
 				continue
 			}
 			log.Printf("overlaying %s --> %s", src, dest)
 
-			cmd := exec.Command("cp", "-rv", src, dest)
-			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-			if err := cmd.Run(); err != nil {
-				log.Fatal(err)
+			var cmd *exec.Cmd
+
+			if strings.HasSuffix(src, "/") {
+				src += "*"
+			}
+			if matches, err := filepath.Glob(src); err == nil {
+				for _, dir := range matches {
+					cmd = exec.Command("cp", "-rv", dir, dest)
+					cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+					if err := cmd.Run(); err != nil {
+						log.Fatal(err)
+					}
+				}
+			} else {
+				log.Printf("No matches for overlay source: '%s':%s", src, err)
 			}
 		}
 	}
