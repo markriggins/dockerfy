@@ -159,13 +159,13 @@ func main() {
 				log.Printf("overlay source: %s does not exist.  Skipping", src)
 				continue
 			}
-			log.Printf("overlaying %s --> %s", src, dest)
 
 			var cmd *exec.Cmd
-
 			if strings.HasSuffix(src, "/") {
 				src += "*"
 			}
+
+			log.Printf("overlaying %s --> %s", src, dest)
 			if matches, err := filepath.Glob(src); err == nil {
 				for _, dir := range matches {
 					cmd = exec.Command("cp", "-rv", dir, dest)
