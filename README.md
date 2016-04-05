@@ -1,60 +1,63 @@
-dockerfy 
-=============
+dockerfy -- Utility to initialize docker containers
+===================================================
+**Dockerfy** is a utility program to initialize and control container applications, and also provide some
+missing OS functionality (such as an init process, and reaping zombies etc.)
 
-##Utility to initialize docker containers with
+##Key Feartures
 
-	1 -- Overlays of alternative content 
-	2 -- Templates for configuration and content
-	3 -- Environment Variable substitutions into templates and overlays
-	4 -- Secrets injected into configuration files
-	5 -- Wait for dependencies
-	6 -- Tail log files
+1. Overlays of alternative content at runtime
+2. Templates for configuration and content
+3. Environment Variable substitutions into templates and overlays
+4. Secrets injected into configuration files (without leaking them to the environment)
+5. Wait for dependencies
+6. Taililng log files to the container's stdout and/or stderr
+7. Starting Services -- and shutting down the container if they fail
+8. Running commands before the primary command begins
+9. Propagating signals to child processes
+9. Reaping Zombie (defunct) processes
 
-##And to control runtime
-	1 -- Start Services
-	2 -- Run commands before the primary command begins
-	3 -- Reap Zombies
 
 
-dockerfy is a utility to simplify running applications in docker containers base  It allows you
-to generate application configuration files at container startup time from templates and
-container environment variables.  It also allows log files to be tailed to stdout and/or
-stderr.
+## Typical Use-Case
+The typical use case for **dockerfy** is when you have an 
+application that:
 
-The typical use case for dockerfy is when you have an application that has one or more
-configuration files and you would like to control some of the values using environment variables.
-
-For example, a Python application using Sqlalchemy might not be able to use environment variables directly.
-It may require that the database URL be read from a python settings file with a variable named
-`SQLALCHEMY_DATABASE_URI`.  dockerfy allows you to set an environment variable such as
-`DATABASE_URL` and update the python file when the container starts.
+1. Relies strictly on configuration files to initialize itself. For example, ningx does not use environment variables directly inside nginx.conf files
+2. Needs to wait for some other service to become available.  For example, in a docker-compose.yml application with a webserver and a database, the webserver may need to wait for the the database to initialize itself at start listening for logins before the webserver starts accepting requests, or tries to connect to the database.
+3. Needs to run some initialization before the real application starts.  For example, applications that rely on a dedicated database may need to run a migrations script to update the database
+4. Needs a companion service to run in the background, such as uwsgi, or a cleanup daeamon to purge caches.
+5. Is a long-lived Container that runs a complex application.  For example, if the long-lived application forks a lot of child processes that forget to wait for their own children, then OS resources can consumed by defunct (zombie) processes, eventually filling the process table.
+6. Needs Passwords or other Secrets.  For example, a Django server might need to login to a database, but passing the password through the environment or a run-time flag is susceptible to accidental leakage.
 
 Another use case is when the application logs to specific files on the filesystem and not stdout
 or stderr. This makes it difficult to troubleshoot the container using the `docker logs` command.
 For example, nginx will log to `/var/log/nginx/access.log` and
-`/var/log/nginx/error.log` by default. While you can sometimes work around this, it's tedious to find
-the a solution for every application. dockerfy allows you to specify which logs files should
+`/var/log/nginx/error.log` by default. While you can work around this for nginx by replacing the access.log file with a symbolic link to /dev/stdout,  **dockerfy** offers a generic solution allowing you to specify which logs files should
 be tailed and where they should be sent.
 
-See [A Simple Way To Dockerfy Applications](http://jasonwilder.com/blog/2014/10/13/a-simple-way-to-dockerfy-applications/)
+## Customizing Startup and Application Configuration
+
+### Inspiration
+See [A Simple Way To Dockerize Applications](http://jasonwilder.com/blog/2014/10/13/a-simple-way-to-dockerize-applications/), [ dockerize](https://github.com/jwilder/dockerize)
+[Docker-init or dinit is a small init-like "daemon"](https://github.com/miekg/dinit)
+
 
 ## Installation
 
 Download the latest version in your container:
-
-* [linux/amd64](https://github.com/markriggins/dockerfy/releases/download/v0.2.0/dockerfy-linux-amd64-v0.2.0.tar.gz)
+[releases](https://github.com/markriggins/dockerfy/releases)
 
 For Ubuntu Images:
 
 ```
-RUN apt-get update && apt-get install -y wget
-RUN wget https://github.com/markriggins/dockerfy/releases/download/v0.2.0/dockerfy-linux-amd64-v0.2.0.tar.gz
-RUN tar -C /usr/local/bin -xzvf dockerfy-linux-amd64-v0.2.0.tar.gz
+RUN wget https://github.com/markriggins/dockerfy/files/204898/dockerfy-linux-amd64-0.0.4.tar.gz; \
+	tar -C /usr/local/bin -xzvf dockerfy-linux-amd64*.gz; \
+	rm dockerfy-linux-amd64*.gz;
 ```
 
 ## Usage
 
-dockerfy works by wrapping the call to your application using the `ENTRYPOINT` or `CMD` directives.
+**dockerfy** works by wrapping the call to your application using the `ENTRYPOINT` or `CMD` directives.
 
 This would generate `/etc/nginx/nginx.conf` from the template located at `/etc/nginx/nginx.tmpl` and
 send `/var/log/nginx/access.log` to `STDOUT` and `/var/log/nginx/error.log` to `STDERR` after running
@@ -127,7 +130,7 @@ $ dockerfy -start tail -f /dev/stderr -- -start   -- echo DONE
 
 It is common when using tools like [Docker Compose](https://docs.docker.com/compose/) to depend on services in other linked containers, however oftentimes relying on [links](https://docs.docker.com/compose/compose-file/#links) is not enough - whilst the container itself may have _started_, the _service(s)_ within it may not yet be ready - resulting in shell script hacks to work around race conditions.
 
-Dockerfy gives you the ability to wait for services on a specified protocol (`tcp`, `tcp4`, `tcp6`, `http`, and `https`) before starting your application:
+**dockerfy** gives you the ability to wait for services on a specified protocol (`tcp`, `tcp4`, `tcp6`, `http`, and `https`) before starting your application:
 
 ```
 $ dockerfy -wait tcp://db:5432 -wait http://web:80
