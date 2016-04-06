@@ -9,16 +9,47 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
 2. Templates for configuration and content
 3. Environment Variable substitutions into templates and overlays
 4. Secrets injected into configuration files (without leaking them to the environment)
-5. Wait for dependencies
+5. Wait for dependencies (any server and port) to become available before the primary command starts
 6. Taililng log files to the container's stdout and/or stderr
 7. Starting Services -- and shutting down the container if they fail
 8. Running commands before the primary command begins
 9. Propagating signals to child processes
 9. Reaping Zombie (defunct) processes
 
+## Example
+
+	ENTRYPOINT [ "dockerfy",                                                                        \
+	                "-secrets", "/secrets/secrets.env",                                             \
+					"-overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",      \
+					"-template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                      \
+					"-wait", "https://${MYSQLSERVER}:${MYSQLPORT", "-timeout", "60",                \
+					"-run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",  \
+					"-start", "/app/bin/cache-cleaner-daemon", "--",                                \
+					"-reap",                                                                        \
+					"nginx",  "-g",  "daemon off;" ]
+						
+						
+
+The above example will run the nginx program inside a docker container, but **before nginx starts**, **dockerfy** will:
+
+1. **Sparsely Overlay** files from the application's /app/overlays directory tree for the ${DEPLOYMENT_ENV} **onto** /usr/share/nginx/html.  For example, the robots.txt file might be restrictive in "staging" deployment environment, but relaxed in "production", so the application can maintain two copies of robots.txt: /app/overlays/staging/robots.txt, and /app/overlays/production/robots.txt
+2. **Load secret settings** from a file a /secrets/secrets.env, that become available for use in templates as {{ .Secret.**VARNAME** }}
+3. **Execute the nginx.conf.tmpl template**. This template uses the powerful go language templating features to substitute environment variables and secret settings directly into the nginx.conf file. (Which is handy since nginx doesn't read the environment itself.)  Every occurance of {{ .Env.**VARNAME** }} will be replaced with the value of $VARNAME, and every {{ .Secret.**VARNAME** }} will be replaced with the secret value of VARNAME.
+4. **Run migrate_lock** a program to perform a Django/MySql database migration to update the database schema, and wait for it to finish.
+5. **Start the cache-cleaner-daemon**, which will run in the background presumably cleaning up stale cache files while nginx runs
+6. **Reap Zombie processes** under a separate goroutine in case the cache-cleaner-deamon loses track of its child processes.
+7. **Run nginx** with its customized nginx.conf file
+8. **Propagate Signals** to all processes, so the container can exit cleanly on SIGHUP or SIGINT
+9. **Monitor Processes** and exit if nginx or the cache-cleaner-daemon dies
 
 
-## Typical Use-Case
+This all assumes that the /secrets volume was mounted and the environment variables $MYSQLSERVER, $MYSQLPORT
+and $DEPLOYMENT_ENV were set when the container started.  Note that **Dockerfy** expands the environment variables in its arguments, since the ENTRYPOINT [] form in Dockerfiles does not.
+
+The "--" argument is used to signify the end of arguments for a -start or -run command.
+
+
+# Typical Use-Case
 The typical use case for **dockerfy** is when you have an 
 application that:
 
@@ -37,6 +68,157 @@ be tailed and where they should be sent.
 
 ## Customizing Startup and Application Configuration
 
+### Sparse Overlays
+Overlays are used provide alternative versions of entire files for various deployment environments (or other reasons).  **[Unlike mounted volumes, overlays do not hide the existing directories and files, they copy the altenative content ONTO the existing content, replacing only what is necessary]**.  This comes in handy for *if-less* languages like CSS, robots.txt, and for icons and images that might need to change depending on the deployment environment.  To use overlays, the application can create a directory tree someplace, perhaps at ./overlays with subdirectories for the various deployment environents like this:
+
+	overlays/
+	├── _common
+	│   └── html
+	│       └── robots.txt
+	├── prod
+	│   └── html
+	│       └── robots.txt
+	└── staging
+    	└── html
+        	└── index.html
+
+The entire ./overlays files must be COPY'd into the Docker image (usually along with the application itself):
+
+	COPY / /app
+	
+Then the desired alternative for the files can be chosen at runtime use the -overlay *src:dest* option
+
+	dockefy -overlay /app/overlays/_commmon/html:/usr/share/nginx/ \
+		    -overlay /app/overlays/$DEPLOYMENT_ENV/html:/usr/share/nginx/ \
+		    nginx
+
+If the source path ends with a /, then all subdirectories underneath it will be copied.  This allows copying onto the root file system as the destination; so you can `-overlay /app/_root/:/` to copy files such as /app/_root/etc/nginx/nginx.conf --> /etc/nginx/nginx.conf.   This is handy if you need to drop a lot of files into various exact locations
+
+#### Loading Secret Settings
+Secrets can loaded from a file by using the -secrets option or the $SECRETS_FILE environment variable.   The secrets file must contain simple NAME=VALUE lines, following bash shell conventions for definitions and comments. Leading and trailing quotes will be trimmed from the value.
+
+	#
+	# Theses are our secrets
+	#
+	PROXY_PASSWORD="a2luZzppc25ha2Vk"
+	
+	
+Secrets can be injected into configuration files by using templates. 
+
+##### Security Concerns
+1. **Reading secrets from files** -- Dockerfy only passes secrets to programs via configuration files to prevent leakage. Secrets could be passed to programs via the environment, but programs use the environment in unpredictable ways, such as logging, or perhaps even dumping their state back to the browser.
+2. **Installing Secrets** -- The recommended way to install secrets in production environments is to save them to a tightly protected place on the host and then mount that directory into running docker containers that need secrets. Yes, this is host-level security, but at this point in time, if the host running the docker daemon is not secure, then security has already been compromised.
+3. **Tokens** -- Tokens that are revokable, or can be configured to expire, are much safer to use as secrets than long-lived passwords.
+Encrypted. If passwords must be used, they should be stored only in a salted, and hashed form, never as plain-text.
+
+#### Executing Templates
+This `-template src:dest` option uses the powerful go language templating features to substitute environment variables and secret settings directly into the template source and writes the result onto the template destination.
+
+#####Simple Template Substitutions -- an nginx.conf.tmpl
+
+	server {
+      location / {
+        proxy_pass {{ .Env.PROXY_PASS_URL }};
+        proxy_set_header Authorization "Basic {{ .Secret.PROXY_PASSWORD }}";
+
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_redirect {{ .Env.PROXY_PASS_URL }} $host;
+      }
+    }
+    
+In the above example, all occurances of the string  {{ .Env.PROXY_PASS_URL }} will be replaced with the value of $PROXY_PASS_URL from the container's environment, and {{ .Secret.PROXY_PASSWORD }} will be replaced with its value, giving the result:
+
+	server {
+      location / {
+        proxy_pass http://myserver.com;
+        proxy_set_header Authorization "Basic a2luZzppc25ha2Vk";
+
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_redirect http://myserver.com $host;
+      }
+    }
+
+
+##### Advanced Templates 
+But go's templates offer advanced features such as if-statements and comments.  
+
+	server {
+    {{/* only set up proxy_pass if PROXY_PASS_URL is set in the environment */}}
+    {{ if .Env.PROXY_PASS_URL }}
+      location / {
+        proxy_pass {{ .Env.PROXY_PASS_URL }};
+
+        {{ if .Secret.PROXY_PASSWORD }}
+        proxy_set_header Authorization "Basic {{ .Secret.PROXY_PASSWORD }}";
+        {{ end }}
+
+
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_redirect {{ .Env.PROXY_PASS_URL }} $host;
+      }
+    {{ end }}
+    }
+
+
+##### Secrets and Templates
+If you're running in development mode and mounting -v $PWD:/app in your docker container, we recommend:
+
+1. Create a ~/.secrets directory with permissions 700
+2. Create a separate secrets file for each application and deployment environment with permissions 600.  Having separate files allows you to avoid lumping all your secrets for all applications and deployment environments into a single file.
+	
+	~/.secrets/my-application--production.env
+	~/.secrets/my-application--staging.env
+	
+3. Export SECRETS_FILE=/secrets/my-application--$DEPLOYMENT_ENV.env
+4. Avoid writing templates to your mounted worktree.  **The expanded results might contain secrets!!** and even worse, if you forget to add them to your .gitignore file, then **your secrets could wind up on github.com!!**  Instead, write them to /etc/ or some other place inside the running container that will be forgotten when the container exits.
+
+### Running Commands 
+The -run option gives you the opportunity to run commands **after** the overlays, secrets and templates have been processed, but **before** the primary program begins.  You can run anything you like, even bash scripts like this:
+
+	dockerfy  \
+		-run rm -rf /tmp/* -- \
+		-run bash -c "sleep 10, echo 'Lets get started now'" -- \
+		nginx -g "daemon off;"
+	
+All options up to but not including the '--' will be passed to the command.  You can run as many commands as you like, they will be run in the same order as how they were provided on the command line, and all commands must finish **successfully** or dockerfy will exit and your primary program will never run.
+
+
+### Starting Services 
+The -start option gives you the opportunity to start a commands as a service **after** the overlays, secrets and templates have been processed, and all -run commands have completed,  but **before** the primary program begins.  You can start anything you like as a service, even bash scripts like this:
+
+	dockerfy  \
+		-start "bash -c "while true; do rm -rf /tmp/cache/*; sleep 3600; done" -- \
+		nginx -g "daemon off;"
+	
+All options up to but not including the '--' will be passed to the command.  You can start as many services as you like, they will all be started in the same order as how they were provided on the command line, and all commands must continue **successfully** or dockerfy will
+stop your primary command and exit, and the container will stop.
+
+### Reaping Zombies
+Long-lived containers should with services use the `-reap` option to clean up any zombie processes that might arise if a service fails to wait for its child processes to die.  Otherwise, eventually the process table can fill up and your container will become unresponsive.  Normally the init daemon would do this important task, but docker containers do not have an init daemon, so **dockerfy** will assume the responsibility.
+
+Note that in order for this work fully, **dockerfy** should be the primary processes with pid 1. Orphaned child processes are all adopted by the primary process, which allows its to wait for them and collect their exit codes and signals, thus clearing the defunct process table entry.   This means that **dockerfy** must be the FIRST command in your ENTRYPOINT or CMD inside your Dockerfile
+
+### Propagating Signals
+**Dockerfy** passes SIGHUP, SIGINT, SIGQUIT, SIGTERM and SIGKILL to all commands and services, giving them a brief chance to respond, and then kills them and exits.  This allows your container to exit gracefully, and completely shut down services, and not hang when it us run in interactive mode via `docker run -it ...` when you type ^C
+
+### Tailing Log Files
+Some programs (like nginx) insist on writing their logs to log files instead of stdout and stderr.  Although nginx can be tricked into doing the desired thing by replacing the default log files with symbolic links to /dev/stdout and /dev/stderr, we really don't know how every program out there does its logging, so **dockerfy** gives you to option of tailing as many log files as you wish to stdout and stderr via the -stdout and -stderr flags.
+
+	$ dockerfy -stdout info.log -stdout perf.log
+
+
+If `inotify` does not work in you container, you use `-poll` to poll for file changes instead.
+
+```
+$ dockerfy -stdout info.log -stdout perf.log -poll
+
+
 ### Inspiration
 See [A Simple Way To Dockerize Applications](http://jasonwilder.com/blog/2014/10/13/a-simple-way-to-dockerize-applications/), [ dockerize](https://github.com/jwilder/dockerize)
 [Docker-init or dinit is a small init-like "daemon"](https://github.com/miekg/dinit)
@@ -47,58 +229,15 @@ See [A Simple Way To Dockerize Applications](http://jasonwilder.com/blog/2014/10
 Download the latest version in your container:
 [releases](https://github.com/markriggins/dockerfy/releases)
 
-For Ubuntu Images:
+For Linux Amd64 Systems:
 
 ```
 RUN wget https://github.com/markriggins/dockerfy/files/204898/dockerfy-linux-amd64-0.0.4.tar.gz; \
 	tar -C /usr/local/bin -xzvf dockerfy-linux-amd64*.gz; \
 	rm dockerfy-linux-amd64*.gz;
 ```
+But of course, use the latest release!
 
-## Usage
-
-**dockerfy** works by wrapping the call to your application using the `ENTRYPOINT` or `CMD` directives.
-
-This would generate `/etc/nginx/nginx.conf` from the template located at `/etc/nginx/nginx.tmpl` and
-send `/var/log/nginx/access.log` to `STDOUT` and `/var/log/nginx/error.log` to `STDERR` after running
-`nginx`, only after waiting for the `web` host to respond on `tcp 8000`:
-
-```
-CMD dockerfy -template /etc/nginx/nginx.tmpl:/etc/nginx/nginx.conf -stdout /var/log/nginx/access.log -stderr /var/log/nginx/error.log -wait tcp://web:8000 nginx
-```
-
-### Command-line Options
-
-You can specify multiple templates by passing `-template` multiple times:
-
-```
-$ dockerfy -template template1.tmpl:file1.cfg -template template2.tmpl:file2
-
-```
-
-Templates can be generated to `STDOUT` by not specifying a dest:
-
-```
-$ dockerfy -template template1.tmpl
-
-```
-
-
-You can overlay files onto the container at runtime by passing `-overlay` multiple times.   The argument uses a form similar to the `--volume` option of the `docker run` command:  `source:dest`.   Overlays are applied recursively onto the destination in a similar manner to `cp -rv`.   If multiple overlays are specified, they are applied in the order in which they were listed on the command line.  
-
-Overlays are used to replace entire sets of files with alternative content, whereas templates allow environment substitutions into a single file.  The example below assumes that /tmp/overlays has already been COPY'd into the image by the Dockerfile.   NOTE: that unexpanded environment variables such as $DEPLOYMENT_ENV below will be expanded to their values by **dockerfy** if they appear in the arguments, and go templates can be used to substitute environment variables.
-
-```
-$ dockerfy  -overlay "/tmp/overlays/_common/html:/usr/share/nginx/" \
-             -overlay '/tmp/overlays/$DEPLOYMENT_ENV/html:/usr/share/nginx/'
-
-$ dockerfy  -overlay "/tmp/overlays/_common/html:/usr/share/nginx/" \
-             -overlay "/tmp/overlays/{{.Env.DEPLOYMENT_ENV}}/html:/usr/share/nginx/"
-```
-
-You can tail multiple files to `STDOUT` and `STDERR` by passing the options multiple times.
-
-```
 $ dockerfy -stdout info.log -stdout perf.log
 
 ```
