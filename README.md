@@ -161,12 +161,4 @@ There are a few built in functions as well:
   * `atoi $value` - Parses a string $value into an int. `{{ if (gt (atoi .Env.NUM_THREADS) 1) }}`
   * `add $arg1 $arg` - Performs integer addition. `{{ add (atoi .Env.SHARD_NUM) -1 }}`
 
-## License
 
-MIT
-
-
-[go.string.Split]: https://golang.org/pkg/strings/#Split
-[go.string.Replace]: https://golang.org/pkg/strings/#Replace
-[go.url.Parse]: https://golang.org/pkg/net/url/#Parse
-[go.url.URL]: https://golang.org/pkg/net/url/#URL

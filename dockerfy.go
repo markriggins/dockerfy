@@ -1,3 +1,12 @@
+// Dockerfy -- utility program to simplify running applications in docker containers
+//
+// Typical Usage (inside a Dockerfile)
+//   ENTRYPOINT [ "dockerfy", \
+//     "-template", "/etc/nginx/conf.d/default.conf.tmpl:/etc/nginx/conf.d/default.conf", \
+//     "-stdout", "/var/log/nginx/access.log", \
+//     "-stderr", "/var/log/nginx/error.log", \
+//     "-secrets", "/secrets/secrets.env", \
+//     "--" ],
 package main
 
 import (
