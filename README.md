@@ -3,16 +3,16 @@ dockerfy -- Utility to initialize docker containers
 **Dockerfy** is a utility program to initialize and control container applications, and also provide some
 missing OS functionality (such as an init process, and reaping zombies etc.)
 
-##Key Feartures
+##Key Features
 
 1. Overlays of alternative content at runtime
 2. Templates for configuration and content
 3. Environment Variable substitutions into templates and overlays
 4. Secrets injected into configuration files (without leaking them to the environment)
-5. Wait for dependencies (any server and port) to become available before the primary command starts
-6. Taililng log files to the container's stdout and/or stderr
-7. Starting Services -- and shutting down the container if they fail
+5. Waiting for dependencies (any server and port) to become available before the primary command starts
+6. Tailing log files to the container's stdout and/or stderr
 8. Running commands before the primary command begins
+7. Starting Services -- and shutting down the container if they fail
 9. Propagating signals to child processes
 9. Reaping Zombie (defunct) processes
 
@@ -32,7 +32,7 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
 
 The above example will run the nginx program inside a docker container, but **before nginx starts**, **dockerfy** will:
 
-1. **Sparsely Overlay** files from the application's /app/overlays directory tree for the ${DEPLOYMENT_ENV} **onto** /usr/share/nginx/html.  For example, the robots.txt file might be restrictive in "staging" deployment environment, but relaxed in "production", so the application can maintain two copies of robots.txt: /app/overlays/staging/robots.txt, and /app/overlays/production/robots.txt
+1. **Sparsely Overlay** files from the application's /app/overlays directory tree for the ${DEPLOYMENT_ENV} **onto** /usr/share/nginx/html.  For example, the robots.txt file might be restrictive in the "staging" deployment environment, but relaxed in "production", so the application can maintain separate copies of robots.txt for each deployment environment: /app/overlays/staging/robots.txt, and /app/overlays/production/robots.txt
 2. **Load secret settings** from a file a /secrets/secrets.env, that become available for use in templates as {{ .Secret.**VARNAME** }}
 3. **Execute the nginx.conf.tmpl template**. This template uses the powerful go language templating features to substitute environment variables and secret settings directly into the nginx.conf file. (Which is handy since nginx doesn't read the environment itself.)  Every occurance of {{ .Env.**VARNAME** }} will be replaced with the value of $VARNAME, and every {{ .Secret.**VARNAME** }} will be replaced with the secret value of VARNAME.
 4. **Run migrate_lock** a program to perform a Django/MySql database migration to update the database schema, and wait for it to finish.
@@ -94,6 +94,9 @@ Then the desired alternative for the files can be chosen at runtime use the -ove
 
 If the source path ends with a /, then all subdirectories underneath it will be copied.  This allows copying onto the root file system as the destination; so you can `-overlay /app/_root/:/` to copy files such as /app/_root/etc/nginx/nginx.conf --> /etc/nginx/nginx.conf.   This is handy if you need to drop a lot of files into various exact locations
 
+Overlay sources that do not exist are simply skipped.  The allows you to specify potential sources of content that may or may not exist in the running container.  In the above example if $DEPLOYMENT_ENV is set to 'local' then the second overlaw will be skipped if there is no corresponding /app/overlays/local source directory, and the container will run with the '_common' html content.
+
+
 #### Loading Secret Settings
 Secrets can loaded from a file by using the -secrets option or the $SECRETS_FILE environment variable.   The secrets file must contain simple NAME=VALUE lines, following bash shell conventions for definitions and comments. Leading and trailing quotes will be trimmed from the value.
 
@@ -109,10 +112,10 @@ Secrets can be injected into configuration files by using templates.
 1. **Reading secrets from files** -- Dockerfy only passes secrets to programs via configuration files to prevent leakage. Secrets could be passed to programs via the environment, but programs use the environment in unpredictable ways, such as logging, or perhaps even dumping their state back to the browser.
 2. **Installing Secrets** -- The recommended way to install secrets in production environments is to save them to a tightly protected place on the host and then mount that directory into running docker containers that need secrets. Yes, this is host-level security, but at this point in time, if the host running the docker daemon is not secure, then security has already been compromised.
 3. **Tokens** -- Tokens that are revokable, or can be configured to expire, are much safer to use as secrets than long-lived passwords.
-Encrypted. If passwords must be used, they should be stored only in a salted, and hashed form, never as plain-text.
+4. **Hashed and Salted** --  If passwords must be used, they should be stored only in a salted, and hashed form, never as plain-text or base64 or simply encrypted.  Without salt, passwords can be broken with a dictionary attack
 
 #### Executing Templates
-This `-template src:dest` option uses the powerful go language templating features to substitute environment variables and secret settings directly into the template source and writes the result onto the template destination.
+This `-template src:dest` option uses the powerful [go language templating](http://golang.org/pkg/text/template/) capability to substitute environment variables and secret settings directly into the template source and writes the result onto the template destination.
 
 #####Simple Template Substitutions -- an nginx.conf.tmpl
 
@@ -165,6 +168,19 @@ But go's templates offer advanced features such as if-statements and comments.
     {{ end }}
     }
 
+If your source language uses {{ }} for some other purpose, you can avoid the conflict by using the `--delims` option to specify alternative delimiters such as "<%:%>"
+
+##### Built-in Functions
+There are a few built in functions as well:
+
+  * `default $var $default` - Returns a default value for one that does not exist. `{{ default .Env.VERSION "0.1.2" }}`
+  * `contains $map $key` - Returns true if a string is within another string
+  * `exists $path` - Determines if a file path exists or not. `{{ exists "/etc/default/myapp" }}`
+  * `split $string $sep` - Splits a string into an array using a separator string. Alias for [`strings.Split`][go.string.Split]. `{{ split .Env.PATH ":" }}`
+  * `replace $string $old $new $count` - Replaces all occurrences of a string within another string. Alias for [`strings.Replace`][go.string.Replace]. `{{ replace .Env.PATH ":" }}`
+  * `parseUrl $url` - Parses a URL into it's [protocol, scheme, host, etc. parts][go.url.URL]. Alias for [`url.Parse`][go.url.Parse]
+  * `atoi $value` - Parses a string $value into an int. `{{ if (gt (atoi .Env.NUM_THREADS) 1) }}`
+  * `add $arg1 $arg` - Performs integer addition. `{{ add (atoi .Env.SHARD_NUM) -1 }}`
 
 ##### Secrets and Templates
 If you're running in development mode and mounting -v $PWD:/app in your docker container, we recommend:
@@ -177,6 +193,18 @@ If you're running in development mode and mounting -v $PWD:/app in your docker c
 	
 3. Export SECRETS_FILE=/secrets/my-application--$DEPLOYMENT_ENV.env
 4. Avoid writing templates to your mounted worktree.  **The expanded results might contain secrets!!** and even worse, if you forget to add them to your .gitignore file, then **your secrets could wind up on github.com!!**  Instead, write them to /etc/ or some other place inside the running container that will be forgotten when the container exits.
+
+
+### Waiting for other dependencies
+
+It is common when using tools like [Docker Compose](https://docs.docker.com/compose/) to depend on services in other linked containers, however oftentimes relying on [links](https://docs.docker.com/compose/compose-file/#links) is not enough - whilst the container itself may have _started_, the _service(s)_ within it may not yet be ready - resulting in shell script hacks to work around race conditions.
+
+**dockerfy** gives you the ability to wait for services on a specified protocol (`tcp`, `tcp4`, `tcp6`, `http`, and `https`) before running commands, starting services, or starting your application
+
+	dockerfy -wait https://$MYSQLSERVER:$MYSQLPORT -timeout 120 ...
+	
+You can specify multiple dependancies by repeating the -wait flag.  If the dependancies fail to become available before the timeout (which defaults to 10 seconds), then dockery will exit, and your primary command will not be run.
+
 
 ### Running Commands 
 The -run option gives you the opportunity to run commands **after** the overlays, secrets and templates have been processed, but **before** the primary program begins.  You can run anything you like, even bash scripts like this:
@@ -213,15 +241,8 @@ Some programs (like nginx) insist on writing their logs to log files instead of 
 	$ dockerfy -stdout info.log -stdout perf.log
 
 
-If `inotify` does not work in you container, you use `-poll` to poll for file changes instead.
+If `inotify` does not work in you container, you use `-log-poll` to poll for file changes instead.
 
-```
-$ dockerfy -stdout info.log -stdout perf.log -poll
-
-
-### Inspiration
-See [A Simple Way To Dockerize Applications](http://jasonwilder.com/blog/2014/10/13/a-simple-way-to-dockerize-applications/), [ dockerize](https://github.com/jwilder/dockerize)
-[Docker-init or dinit is a small init-like "daemon"](https://github.com/miekg/dinit)
 
 
 ## Installation
@@ -238,66 +259,15 @@ RUN wget https://github.com/markriggins/dockerfy/files/204898/dockerfy-linux-amd
 ```
 But of course, use the latest release!
 
-$ dockerfy -stdout info.log -stdout perf.log
 
-```
+##Inspiration and Open Source Usage
+Dockerfy is based on the work of others, relying heavily on jwilder's templates and log tailer, [ dockerize](https://github.com/jwilder/dockerize) and  miekg's  zombie reaping from [dinit ](https://github.com/miekg/dinit) a small init-like "daemon", and other tips on stackoverflow and other places of public commentary about docker.
 
-If `inotify` does not work in you container, you use `-poll` to poll for file changes instead.
+The secrets injection, overlays, and commands and the command-line syntax for running commands and starting services are unique to dockerfy.
 
-```
-$ dockerfy -stdout info.log -stdout perf.log -poll
-
-```
+See:
+[A Simple Way To Dockerize Applications](http://jasonwilder.com/blog/2014/10/13/a-simple-way-to-dockerize-applications/)
 
 
-If your file uses `{{` and `}}` as part of it's syntax, you can change the template escape characters using the `-delims`.
-
-```
-$ dockerfy -delims "<%:%>"
-```
-
-If you need to run one or more commands before the main command starts, then use the `-run` option.
-
-```
-$ dockerfy -run sleep 5 -- -run ls -l  -- echo DONE
-```
-
-If you need to start one or more service commands before the command starts, then use the `-start` option. If any service exits, then the main command will stop as well.
-
-```
-$ dockerfy -start tail -f /dev/stderr -- -start   -- echo DONE
-```
-
-## Waiting for other dependencies
-
-It is common when using tools like [Docker Compose](https://docs.docker.com/compose/) to depend on services in other linked containers, however oftentimes relying on [links](https://docs.docker.com/compose/compose-file/#links) is not enough - whilst the container itself may have _started_, the _service(s)_ within it may not yet be ready - resulting in shell script hacks to work around race conditions.
-
-**dockerfy** gives you the ability to wait for services on a specified protocol (`tcp`, `tcp4`, `tcp6`, `http`, and `https`) before starting your application:
-
-```
-$ dockerfy -wait tcp://db:5432 -wait http://web:80
-```
-
-See [this issue](https://github.com/docker/compose/issues/374#issuecomment-126312313) for a deeper discussion, and why support isn't and won't be available in the Docker ecosystem itself.
-
-## Using Templates
-
-Templates use Golang [text/template](http://golang.org/pkg/text/template/). You can access environment
-variables within a template with `.Env`.
-
-```
-{{ .Env.PATH }} is my path
-```
-
-There are a few built in functions as well:
-
-  * `default $var $default` - Returns a default value for one that does not exist. `{{ default .Env.VERSION "0.1.2" }}`
-  * `contains $map $key` - Returns true if a string is within another string
-  * `exists $path` - Determines if a file path exists or not. `{{ exists "/etc/default/myapp" }}`
-  * `split $string $sep` - Splits a string into an array using a separator string. Alias for [`strings.Split`][go.string.Split]. `{{ split .Env.PATH ":" }}`
-  * `replace $string $old $new $count` - Replaces all occurrences of a string within another string. Alias for [`strings.Replace`][go.string.Replace]. `{{ replace .Env.PATH ":" }}`
-  * `parseUrl $url` - Parses a URL into it's [protocol, scheme, host, etc. parts][go.url.URL]. Alias for [`url.Parse`][go.url.Parse]
-  * `atoi $value` - Parses a string $value into an int. `{{ if (gt (atoi .Env.NUM_THREADS) 1) }}`
-  * `add $arg1 $arg` - Performs integer addition. `{{ add (atoi .Env.SHARD_NUM) -1 }}`
 
 
