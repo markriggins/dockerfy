@@ -49,14 +49,14 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd string, args ...
 	err = process.Wait()
 
 	if err == nil {
-		log.Println("Command finished successfully: " + toString(process))
+		log.Printf("Command finished successfully: `%s`\n", toString(process))
 	} else {
 		log.Printf("Command `%s` exited with error: %s\n", toString(process), err)
-		if cancel != nil {
-			cancel()
-		}
 		// OPTIMIZE: This could be cleaner
 		// os.Exit(err.(*exec.ExitError).Sys().(syscall.WaitStatus).ExitStatus())
+	}
+	if cancel != nil {
+		cancel()
 	}
 }
 

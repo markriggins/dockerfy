@@ -16,35 +16,63 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
 9. Propagating signals to child processes
 9. Reaping Zombie (defunct) processes
 
-## Example
+## Dockerfile Example
 
-	ENTRYPOINT [ "dockerfy",                                                                        \
-	                "-secrets", "/secrets/secrets.env",                                             \
-					"-overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",      \
-					"-template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                      \
-					"-wait", "https://${MYSQLSERVER}:${MYSQLPORT", "-timeout", "60",                \
-					"-run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",  \
-					"-start", "/app/bin/cache-cleaner-daemon", "--",                                \
-					"-reap",                                                                        \
-					"nginx",  "-g",  "daemon off;" ]
-						
-						
+    FROM markriggins/nginx-with-dockerfy
+    
+    ENTRYPOINT [ "dockerfy",                                                                           \
+                    "-secrets", "/secrets/secrets.env",                                                \
+                    "-overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",         \
+                    "-template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         \
+                    "-wait", "https://${MYSQLSERVER}:${MYSQLPORT", "-timeout", "60",                   \
+                    "-run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",     \
+                    "-start", "/app/bin/cache-cleaner-daemon", "-p", "{{ .Secret.DB_PASSWORD }}", "--",\
+                    "-reap",                                                                           \
+                  	"nginx",  "-g",  "daemon off;" ]
+
+## equivalent docker-compose.yml Example
+
+    nginx:
+      image: markriggins/nginx-with-dockerfy
+
+      volumes:
+        - /secrets:/secrets
+
+      environment:
+        - SECRETS_FILE=/secrets/secrets.env
+
+      entrypoint: 
+        - dockerfy
+
+      command: [ 
+        "-overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",         
+        "-template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         
+        "-wait", "https://${MYSQLSERVER}:${MYSQLPORT", "-timeout", "60",                   
+        "-run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",     
+        "-start", "/app/bin/cache-cleaner-daemon", "-p", "{{ .Secret.DB_PASSWORD }}", "--",
+        "-reap",                                                                           
+        '--', 'nginx', '-g', 'daemon off;' ]
+
+			
 
 The above example will run the nginx program inside a docker container, but **before nginx starts**, **dockerfy** will:
 
 1. **Sparsely Overlay** files from the application's /app/overlays directory tree for the ${DEPLOYMENT_ENV} **onto** /usr/share/nginx/html.  For example, the robots.txt file might be restrictive in the "staging" deployment environment, but relaxed in "production", so the application can maintain separate copies of robots.txt for each deployment environment: /app/overlays/staging/robots.txt, and /app/overlays/production/robots.txt
 2. **Load secret settings** from a file a /secrets/secrets.env, that become available for use in templates as {{ .Secret.**VARNAME** }}
-3. **Execute the nginx.conf.tmpl template**. This template uses the powerful go language templating features to substitute environment variables and secret settings directly into the nginx.conf file. (Which is handy since nginx doesn't read the environment itself.)  Every occurance of {{ .Env.**VARNAME** }} will be replaced with the value of $VARNAME, and every {{ .Secret.**VARNAME** }} will be replaced with the secret value of VARNAME.
+3. **Execute the nginx.conf.tmpl template**. This template uses the powerful go language templating features to substitute environment variables and secret settings directly into the nginx.conf file. (Which is handy since nginx doesn't read the environment itself.)  Every occurance of {{ .Env.**VARNAME** }} will be replaced with the value of $VARNAME, and every {{ .Secret.**VARNAME** }} will be replaced with the secret value of VARNAME. 
+4. **Wait** for the http://${MYSQLSERVER} server to start accepting requests on port ${MYSQLPORT}
 4. **Run migrate_lock** a program to perform a Django/MySql database migration to update the database schema, and wait for it to finish.
 5. **Start the cache-cleaner-daemon**, which will run in the background presumably cleaning up stale cache files while nginx runs
-6. **Reap Zombie processes** under a separate goroutine in case the cache-cleaner-deamon loses track of its child processes.
-7. **Run nginx** with its customized nginx.conf file
+6. **Start Reaping Zombie processes** under a separate goroutine in case the cache-cleaner-deamon loses track of its child processes.
+7. **Run nginx** with its customized nginx.conf file and html
 8. **Propagate Signals** to all processes, so the container can exit cleanly on SIGHUP or SIGINT
 9. **Monitor Processes** and exit if nginx or the cache-cleaner-daemon dies
 
 
 This all assumes that the /secrets volume was mounted and the environment variables $MYSQLSERVER, $MYSQLPORT
-and $DEPLOYMENT_ENV were set when the container started.  Note that **Dockerfy** expands the environment variables in its arguments, since the ENTRYPOINT [] form in Dockerfiles does not.
+and $DEPLOYMENT_ENV were set when the container started.  Note that **dockerfy** expands the environment variables in its arguments, since the ENTRYPOINT [] form in Dockerfiles does not, replacing all $VARNAME, {{ .Env.VARNAME }} and {{ .Secret.VARNAME }} occurances with their values from the environment or secrets file.
+
+Note that the `ps -ef` command would list the unexpanded argument '{{ .Secret.DB_PASSWORD }}', not the actual password
 
 The "--" argument is used to signify the end of arguments for a -start or -run command.
 
@@ -88,8 +116,8 @@ The entire ./overlays files must be COPY'd into the Docker image (usually along 
 	
 Then the desired alternative for the files can be chosen at runtime use the -overlay *src:dest* option
 
-	dockefy -overlay /app/overlays/_commmon/html:/usr/share/nginx/ \
-		    -overlay /app/overlays/$DEPLOYMENT_ENV/html:/usr/share/nginx/ \
+	$ dockefy -overlay /app/overlays/_commmon/html:/usr/share/nginx/ \
+		      -overlay /app/overlays/$DEPLOYMENT_ENV/html:/usr/share/nginx/ \
 		    nginx
 
 If the source path ends with a /, then all subdirectories underneath it will be copied.  This allows copying onto the root file system as the destination; so you can `-overlay /app/_root/:/` to copy files such as /app/_root/etc/nginx/nginx.conf --> /etc/nginx/nginx.conf.   This is handy if you need to drop a lot of files into various exact locations
@@ -101,12 +129,12 @@ Overlay sources that do not exist are simply skipped.  The allows you to specify
 Secrets can loaded from a file by using the -secrets option or the $SECRETS_FILE environment variable.   The secrets file must contain simple NAME=VALUE lines, following bash shell conventions for definitions and comments. Leading and trailing quotes will be trimmed from the value.
 
 	#
-	# Theses are our secrets
+	# These are our secrets
 	#
 	PROXY_PASSWORD="a2luZzppc25ha2Vk"
 	
 	
-Secrets can be injected into configuration files by using templates. 
+Secrets can be injected into configuration files by using [Secrets in Templates](https://github.com/markriggins/dockerfy#secrets-in-templates). 
 
 ##### Security Concerns
 1. **Reading secrets from files** -- Dockerfy only passes secrets to programs via configuration files to prevent leakage. Secrets could be passed to programs via the environment, but programs use the environment in unpredictable ways, such as logging, or perhaps even dumping their state back to the browser.
@@ -182,7 +210,7 @@ There are a few built in functions as well:
   * `atoi $value` - Parses a string $value into an int. `{{ if (gt (atoi .Env.NUM_THREADS) 1) }}`
   * `add $arg1 $arg` - Performs integer addition. `{{ add (atoi .Env.SHARD_NUM) -1 }}`
 
-##### Secrets and Templates
+##### Secrets in Templates
 If you're running in development mode and mounting -v $PWD:/app in your docker container, we recommend:
 
 1. Create a ~/.secrets directory with permissions 700
@@ -199,9 +227,9 @@ If you're running in development mode and mounting -v $PWD:/app in your docker c
 
 It is common when using tools like [Docker Compose](https://docs.docker.com/compose/) to depend on services in other linked containers, however oftentimes relying on [links](https://docs.docker.com/compose/compose-file/#links) is not enough - whilst the container itself may have _started_, the _service(s)_ within it may not yet be ready - resulting in shell script hacks to work around race conditions.
 
-**dockerfy** gives you the ability to wait for services on a specified protocol (`tcp`, `tcp4`, `tcp6`, `http`, and `https`) before running commands, starting services, or starting your application
+**Dockerfy** gives you the ability to wait for services on a specified protocol (`tcp`, `tcp4`, `tcp6`, `http`, and `https`) before running commands, starting services, or starting your application
 
-	dockerfy -wait https://$MYSQLSERVER:$MYSQLPORT -timeout 120 ...
+	$ dockerfy -wait https://$MYSQLSERVER:$MYSQLPORT -timeout 120 ...
 	
 You can specify multiple dependancies by repeating the -wait flag.  If the dependancies fail to become available before the timeout (which defaults to 10 seconds), then dockery will exit, and your primary command will not be run.
 
@@ -209,22 +237,22 @@ You can specify multiple dependancies by repeating the -wait flag.  If the depen
 ### Running Commands 
 The -run option gives you the opportunity to run commands **after** the overlays, secrets and templates have been processed, but **before** the primary program begins.  You can run anything you like, even bash scripts like this:
 
-	dockerfy  \
+	$ dockerfy  \
 		-run rm -rf /tmp/* -- \
 		-run bash -c "sleep 10, echo 'Lets get started now'" -- \
 		nginx -g "daemon off;"
 	
-All options up to but not including the '--' will be passed to the command.  You can run as many commands as you like, they will be run in the same order as how they were provided on the command line, and all commands must finish **successfully** or dockerfy will exit and your primary program will never run.
+All options up to but not including the '--' will be passed to the command.  You can run as many commands as you like, they will be run in the same order as how they were provided on the command line, and all commands must finish **successfully** or **dockerfy** will exit and your primary program will never run.
 
 
 ### Starting Services 
 The -start option gives you the opportunity to start a commands as a service **after** the overlays, secrets and templates have been processed, and all -run commands have completed,  but **before** the primary program begins.  You can start anything you like as a service, even bash scripts like this:
 
-	dockerfy  \
+	$ dockerfy  \
 		-start "bash -c "while true; do rm -rf /tmp/cache/*; sleep 3600; done" -- \
 		nginx -g "daemon off;"
 	
-All options up to but not including the '--' will be passed to the command.  You can start as many services as you like, they will all be started in the same order as how they were provided on the command line, and all commands must continue **successfully** or dockerfy will
+All options up to but not including the '--' will be passed to the command.  You can start as many services as you like, they will all be started in the same order as how they were provided on the command line, and all commands must continue **successfully** or **dockerfy** will
 stop your primary command and exit, and the container will stop.
 
 ### Reaping Zombies
@@ -261,9 +289,9 @@ But of course, use the latest release!
 
 
 ##Inspiration and Open Source Usage
-Dockerfy is based on the work of others, relying heavily on jwilder's templates and log tailer, [ dockerize](https://github.com/jwilder/dockerize) and  miekg's  zombie reaping from [dinit ](https://github.com/miekg/dinit) a small init-like "daemon", and other tips on stackoverflow and other places of public commentary about docker.
+Dockerfy is based on the work of others, relying heavily on jwilder's templates, wait, and log tailer, [ dockerize](https://github.com/jwilder/dockerize) and  miekg's  zinit ](https://github.com/miekg/dinit) a small init-like "daemon", and other tips on stackoverflow and other places of public commentary about docker.
 
-The secrets injection, overlays, and commands and the command-line syntax for running commands and starting services are unique to dockerfy.
+The secrets injection, overlays, and commands that run before the primary command starts and the command-line syntax for running commands and starting services are unique to **dockerfy**.
 
 See:
 [A Simple Way To Dockerize Applications](http://jasonwilder.com/blog/2014/10/13/a-simple-way-to-dockerize-applications/)

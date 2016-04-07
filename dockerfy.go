@@ -208,12 +208,12 @@ func main() {
 
 	for _, logFile := range stdoutTailFlag {
 		wg.Add(1)
-		go tailFile(ctx, cancel, logFile, logPollFlag, os.Stdout)
+		go tailFile(ctx, cancel, os.ExpandEnv(string_template_eval(logFile)), logPollFlag, os.Stdout)
 	}
 
 	for _, logFile := range stderrTailFlag {
 		wg.Add(1)
-		go tailFile(ctx, cancel, logFile, logPollFlag, os.Stderr)
+		go tailFile(ctx, cancel, os.ExpandEnv(string_template_eval(logFile)), logPollFlag, os.Stderr)
 	}
 
 	// Process -start and -run flags
@@ -221,12 +221,16 @@ func main() {
 
 		log.Printf("Pre-Running: `%s`\n", toString(cmd))
 		wg.Add(1)
-		// Run in the foreground
-		runCmd(ctx, cancel, cmd.Path, cmd.Args[1:]...)
+		// Run to completion, but do not cancel our ctx context
+		runCmd(context.Background(), func() {}, cmd.Path, cmd.Args[1:]...)
 	}
 	for _, cmd := range startCmds {
 		log.Printf("Starting Service: `%s`\n", toString(cmd))
 		wg.Add(1)
+
+		// Start each service, and bind them to our ctx context so
+		// 1) any failure will close/cancel ctx
+		// 2) if the primary command fails, then the services will be stopped
 		go runCmd(ctx, func() {
 			log.Printf("Service `%s` stopped\n", toString(cmd))
 			cancel()

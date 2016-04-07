@@ -1,5 +1,6 @@
 *.gz
 *.o
 *.a
+*.mk.*
 zombie-maker
 zombie-maker-debian-binary

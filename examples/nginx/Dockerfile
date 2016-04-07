@@ -1,5 +1,5 @@
 FROM nginx:1.9
-MAINTAINER Jason Wilder mail@jasonwilder.com
+MAINTAINER Mark Riggins mark.riggins@gmail.com
 
 RUN apt-get update -qq && apt-get install -y vim
 

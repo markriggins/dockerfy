@@ -44,7 +44,8 @@ func (c *TemplateContext) Secret() map[string]string {
 	// Secrets can come from (in order of precedence):
 	// 1) -secrets <file>
 	// 2) $SECRETS_FILE
-	secretsFileName := secretsFlag
+	secretsFileName := os.ExpandEnv(string_template_eval(secretsFlag))
+
 	if secretsFileName == "" {
 		secretsFileName = os.Getenv("SECRETS_FILE")
 	}

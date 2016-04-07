@@ -1,0 +1,21 @@
+#
+#  docker-compose file to run the equivalient of the Makefile target 'run-prod-secrets'
+#
+nginx-with-dockerfy:
+  image: markriggins/nginx-with-dockerfy
+  
+  volumes:
+    - $PWD:/secrets
+  
+  environment:
+    - SECRETS_FILE=/secrets/secrets.env
+  
+  entrypoint:
+    - dockerfy
+
+  command: [ 
+    '-overlay', '/tmp/overlays/_common/:/usr/share/nginx/',
+    '-overlay', '/tmp/overlays/{{ .Env.DEPLOYMENT_ENV }}/html:/usr/share/nginx/',
+    '-template', '/secrets/secrets.html.tmpl:/usr/share/nginx/html/secrets.html',
+    '--', 'nginx' ]
+

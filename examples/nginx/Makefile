@@ -1,11 +1,19 @@
 .PHONY : build run-staging run-prod stop run-proxy-amazon run-prod-secrets
 .PHONY : zombie-maker-debian-binary
 
-build: zombie-maker
+TAG:=`git describe --abbrev=0 --tags`
+
+build: zombie-maker .mk.nginx-with-dockerfy
 	cd ../..; goxc -os linux -arch amd64
-	cp -f $(shell bash -xc 'find $(GOPATH)/bin -name dockerfy_linux_amd64.tar.gz| head -1') .dockerfy_linux_amd64.tar.gz
 	docker build -t dockerfied-nginx .
-	rm .dockerfy_linux_amd64.tar.gz
+
+push: .mk.nginx-with-dockerfy
+	docker push markriggins/nginx-with-dockerfy
+
+.mk.nginx-with-dockerfy: Dockerfile.nginx-with-dockerfy
+	cp -f $(shell bash -xc 'find $(GOPATH)/bin -name dockerfy_linux_amd64.tar.gz| head -1') .dockerfy_linux_amd64.tar.gz
+	docker build --file Dockerfile.nginx-with-dockerfy -t markriggins/nginx-with-dockerfy .
+	docker tag markriggins/nginx-with-dockerfy markriggins/nginx-with-dockerfy:$(TAG)
 
 
 zombie-maker: zombie-maker.c
@@ -49,15 +57,16 @@ run-prod-secrets: stop
 	open http://$(shell docker-machine ip $(shell docker-machine active))/secrets.html
 
 
-test: start-tests run-zombie-test run-service-stops-too-soon-test run-primary-stops-while-service-is-running-test
+test: start-tests run-zombie-test run-service-stops-too-soon-test run-primary-stops-while-service-is-running-test run-before-primary-test run-primary-service-exits
+	@echo "\n\nALL TESTS PASSED"
 
 start-tests:
 	@echo "\nRunning all tests"
-	@echo "--------------------------------------------------------------------------"
+	@echo "################################################################################"
 
 run-zombie-test: 
-	@echo "\nRunning Zombie Test -- expect 10 zombies to get reaped"
-	@echo "--------------------------------------------------------------------------"
+	@echo "\n\nRunning Zombie Test -- expect 10 zombies to get reaped"
+	@echo "################################################################################"
 	@docker rm -f dockerfied-nginx 2>/dev/null || true
 	@echo "\nRun zombie-maker inside dockerfied-nginx"
 	@echo "--------------------------------------------------------------------------"
@@ -69,12 +78,13 @@ run-zombie-test:
 	@sleep 5
 	@echo "\nPs -ef looking initial zombies"
 	@echo "--------------------------------------------------------------------------"
-	@docker exec dockerfied-nginx ps -ef | egrep defunct
+	docker exec dockerfied-nginx ps -ef | egrep defunct
 	
 	@sleep 5
 	@echo "\nPs -ef looking for leftover zombies -- should be empty"
 	@echo "--------------------------------------------------------------------------"
-	@docker exec dockerfied-nginx ps -ef | egrep defunct || true
+	docker exec dockerfied-nginx ps -ef | egrep defunct || true
+	@docker exec dockerfied-nginx ps -ef | egrep -q defunct  && exit 1 || true
 
 	@echo "\nLogs"
 	@echo "--------------------------------------------------------------------------"
@@ -87,21 +97,23 @@ run-zombie-test:
 
 
 run-service-stops-too-soon-test: 
-	@echo "\nRunning 'run-service-stops-too-soon-test'"
+	@echo "\n\nRunning 'run-service-stops-too-soon-test'"
 	@echo "\tWhen the service exits, the primary command should also stop"
-	@echo "--------------------------------------------------------------------------"
+	@echo "################################################################################"
 	@docker rm -f dockerfied-nginx 2>/dev/null || true
 	docker run -d -it --name dockerfied-nginx dockerfied-nginx -verbose \
 		-start bash -c 'sleep 5 && echo "service exiting"' -- \
 		sleep 10 >/dev/null
 	@sleep 7
-	docker logs dockerfied-nginx
+	docker logs dockerfied-nginx 2>&1 | egrep -q 'Service.*stopped' 
+	@echo "\t Service Stopped"
+	@echo "run-service-stops-too-soon-test PASSED"
 
 
 run-primary-stops-while-service-is-running-test: 
-	@echo "\nRunning 'run-primary-stops-while-service-is-running-test'"
+	@echo "\n\nRunning 'run-primary-stops-while-service-is-running-test'"
 	@echo "\tThis should kill the services before they have a chance to finish"
-	@echo "--------------------------------------------------------------------------"
+	@echo "################################################################################"
 	@docker rm -f dockerfied-nginx 2>/dev/null || true
 	docker run -d -it --name dockerfied-nginx dockerfied-nginx -verbose \
 		-start bash -c 'sleep 10 && echo "ERROR: service-1 STILL RUNNING"' -- \
@@ -109,13 +121,15 @@ run-primary-stops-while-service-is-running-test:
 		-start bash -c 'sleep 10 && echo "ERROR: service-3 STILL RUNNING"' -- \
 		sleep 5 >/dev/null
 	@sleep 7
-	docker logs dockerfied-nginx
+	@docker logs dockerfied-nginx 2>&1  | egrep -q 'Primary Command.*stopped'
+	@docker logs dockerfied-nginx 2>&1  | egrep -q '^ERROR:.*STILLRUNNING' && exit 1 || true
+	@echo "run-primary-stops-while-service-is-running-test PASSED"
 	
 
 run-before-primary-test:
-	@echo "\nrun-before-primary-test:"
+	@echo "\n\nrun-before-primary-test:"
 	@echo "\tBefore the service starts, the -run commands should finish in order"
-	@echo "--------------------------------------------------------------------------"
+	@echo "################################################################################"
 	@docker rm -f dockerfied-nginx 2>/dev/null || true
 	docker run -d -it --name dockerfied-nginx dockerfied-nginx -verbose \
 		-run bash -c 'sleep 3; echo "1 DONE"' -- \
@@ -123,5 +137,20 @@ run-before-primary-test:
 		-run bash -c 'echo "3 DONE"' -- \
 		bash -c "sleep 4; echo '4 PRIMARY COMMAND DONE'"
 	@sleep 15
-	docker logs dockerfied-nginx 2>&1 | egrep '^[0-9].*DONE' 
+	docker logs dockerfied-nginx 2>&1 | egrep -q '^1 DONE' 
+	docker logs dockerfied-nginx 2>&1 | egrep -q '^2 DONE' 
+	docker logs dockerfied-nginx 2>&1 | egrep -q '^3 DONE' 
+	docker logs dockerfied-nginx 2>&1 | egrep -q '^4 PRIMARY COMMAND DONE' 
+	@echo "run-before-primary-test PASSED"
+
+run-primary-service-exits:
+	@docker rm -f dockerfied-nginx-container 2>/dev/null || true
+	@echo "\n\nrun-primary-service-exits:"
+	@echo "\tVerify that when the primary service finishes, the container exits"
+	@echo "################################################################################"
+	docker run -it --name dockerfied-nginx-container dockerfied-nginx -verbose echo DONE 
+	docker inspect --format '{{ .State.Status }}' dockerfied-nginx-container  | egrep -q exited
+	@docker rm -f dockerfied-nginx-container 2>/dev/null || true
+	@echo "run-primary-service-exits PASSED"
+
 
