@@ -21,13 +21,13 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
     FROM markriggins/nginx-with-dockerfy
     
     ENTRYPOINT [ "dockerfy",                                                                           \
-                    "-secrets", "/secrets/secrets.env",                                                \
-                    "-overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",         \
-                    "-template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         \
-                    "-wait", "https://${MYSQLSERVER}:${MYSQLPORT", "-timeout", "60",                   \
-                    "-run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",     \
-                    "-start", "/app/bin/cache-cleaner-daemon", "-p", "{{ .Secret.DB_PASSWORD }}", "--",\
-                    "-reap",                                                                           \
+                    "--secrets", "/secrets/secrets.env",                                                \
+                    "--overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",         \
+                    "--template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         \
+                    "--wait", "https://${MYSQLSERVER}:${MYSQLPORT", "-timeout", "60",                   \
+                    "--run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",     \
+                    "--start", "/app/bin/cache-cleaner-daemon", "-p", "{{ .Secret.DB_PASSWORD }}", "--",\
+                    "--reap",                                                                           \
                   	"nginx",  "-g",  "daemon off;" ]
 
 ## equivalent docker-compose.yml Example
@@ -45,12 +45,12 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
         - dockerfy
 
       command: [ 
-        "-overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",         
-        "-template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         
-        "-wait", "https://${MYSQLSERVER}:${MYSQLPORT", "-timeout", "60",                   
-        "-run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",     
-        "-start", "/app/bin/cache-cleaner-daemon", "-p", "{{ .Secret.DB_PASSWORD }}", "--",
-        "-reap",                                                                           
+        "--overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",         
+        "--template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         
+        "--wait", "https://${MYSQLSERVER}:${MYSQLPORT", "-timeout", "60",                   
+        "--run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",     
+        "--start", "/app/bin/cache-cleaner-daemon", "-p", "{{ .Secret.DB_PASSWORD }}", "--",
+        "--reap",                                                                           
         '--', 'nginx', '-g', 'daemon off;' ]
 
 			
@@ -116,8 +116,8 @@ The entire ./overlays files must be COPY'd into the Docker image (usually along 
 	
 Then the desired alternative for the files can be chosen at runtime use the -overlay *src:dest* option
 
-	$ dockefy -overlay /app/overlays/_commmon/html:/usr/share/nginx/ \
-		      -overlay /app/overlays/$DEPLOYMENT_ENV/html:/usr/share/nginx/ \
+	$ dockefy --overlay /app/overlays/_commmon/html:/usr/share/nginx/ \
+		      --overlay /app/overlays/$DEPLOYMENT_ENV/html:/usr/share/nginx/ \
 		    nginx
 
 If the source path ends with a /, then all subdirectories underneath it will be copied.  This allows copying onto the root file system as the destination; so you can `-overlay /app/_root/:/` to copy files such as /app/_root/etc/nginx/nginx.conf --> /etc/nginx/nginx.conf.   This is handy if you need to drop a lot of files into various exact locations
@@ -126,7 +126,7 @@ Overlay sources that do not exist are simply skipped.  The allows you to specify
 
 
 #### Loading Secret Settings
-Secrets can loaded from a file by using the -secrets option or the $SECRETS_FILE environment variable.   The secrets file must contain simple NAME=VALUE lines, following bash shell conventions for definitions and comments. Leading and trailing quotes will be trimmed from the value.
+Secrets can loaded from a file by using the `--secrets` option or the $SECRETS_FILE environment variable.   The secrets file must contain simple NAME=VALUE lines, following bash shell conventions for definitions and comments. Leading and trailing quotes will be trimmed from the value.
 
 	#
 	# These are our secrets
@@ -143,7 +143,7 @@ Secrets can be injected into configuration files by using [Secrets in Templates]
 4. **Hashed and Salted** --  If passwords must be used, they should be stored only in a salted, and hashed form, never as plain-text or base64 or simply encrypted.  Without salt, passwords can be broken with a dictionary attack
 
 #### Executing Templates
-This `-template src:dest` option uses the powerful [go language templating](http://golang.org/pkg/text/template/) capability to substitute environment variables and secret settings directly into the template source and writes the result onto the template destination.
+This `--template src:dest` option uses the powerful [go language templating](http://golang.org/pkg/text/template/) capability to substitute environment variables and secret settings directly into the template source and writes the result onto the template destination.
 
 #####Simple Template Substitutions -- an nginx.conf.tmpl
 
@@ -229,34 +229,34 @@ It is common when using tools like [Docker Compose](https://docs.docker.com/comp
 
 **Dockerfy** gives you the ability to wait for services on a specified protocol (`tcp`, `tcp4`, `tcp6`, `http`, and `https`) before running commands, starting services, or starting your application
 
-	$ dockerfy -wait https://$MYSQLSERVER:$MYSQLPORT -timeout 120 ...
+	$ dockerfy --wait https://$MYSQLSERVER:$MYSQLPORT -timeout 120 ...
 	
 You can specify multiple dependancies by repeating the -wait flag.  If the dependancies fail to become available before the timeout (which defaults to 10 seconds), then dockery will exit, and your primary command will not be run.
 
 
 ### Running Commands 
-The -run option gives you the opportunity to run commands **after** the overlays, secrets and templates have been processed, but **before** the primary program begins.  You can run anything you like, even bash scripts like this:
+The `--run` option gives you the opportunity to run commands **after** the overlays, secrets and templates have been processed, but **before** the primary program begins.  You can run anything you like, even bash scripts like this:
 
 	$ dockerfy  \
-		-run rm -rf /tmp/* -- \
-		-run bash -c "sleep 10, echo 'Lets get started now'" -- \
+		--run rm -rf /tmp/* -- \
+		--run bash -c "sleep 10, echo 'Lets get started now'" -- \
 		nginx -g "daemon off;"
 	
 All options up to but not including the '--' will be passed to the command.  You can run as many commands as you like, they will be run in the same order as how they were provided on the command line, and all commands must finish **successfully** or **dockerfy** will exit and your primary program will never run.
 
 
 ### Starting Services 
-The -start option gives you the opportunity to start a commands as a service **after** the overlays, secrets and templates have been processed, and all -run commands have completed,  but **before** the primary program begins.  You can start anything you like as a service, even bash scripts like this:
+The `--start` option gives you the opportunity to start a commands as a service **after** the overlays, secrets and templates have been processed, and all --run commands have completed,  but **before** the primary program begins.  You can start anything you like as a service, even bash scripts like this:
 
 	$ dockerfy  \
-		-start "bash -c "while true; do rm -rf /tmp/cache/*; sleep 3600; done" -- \
+		--start "bash -c "while true; do rm -rf /tmp/cache/*; sleep 3600; done" -- \
 		nginx -g "daemon off;"
 	
 All options up to but not including the '--' will be passed to the command.  You can start as many services as you like, they will all be started in the same order as how they were provided on the command line, and all commands must continue **successfully** or **dockerfy** will
 stop your primary command and exit, and the container will stop.
 
 ### Reaping Zombies
-Long-lived containers should with services use the `-reap` option to clean up any zombie processes that might arise if a service fails to wait for its child processes to die.  Otherwise, eventually the process table can fill up and your container will become unresponsive.  Normally the init daemon would do this important task, but docker containers do not have an init daemon, so **dockerfy** will assume the responsibility.
+Long-lived containers should with services use the `--reap` option to clean up any zombie processes that might arise if a service fails to wait for its child processes to die.  Otherwise, eventually the process table can fill up and your container will become unresponsive.  Normally the init daemon would do this important task, but docker containers do not have an init daemon, so **dockerfy** will assume the responsibility.
 
 Note that in order for this work fully, **dockerfy** should be the primary processes with pid 1. Orphaned child processes are all adopted by the primary process, which allows its to wait for them and collect their exit codes and signals, thus clearing the defunct process table entry.   This means that **dockerfy** must be the FIRST command in your ENTRYPOINT or CMD inside your Dockerfile
 
@@ -266,10 +266,10 @@ Note that in order for this work fully, **dockerfy** should be the primary proce
 ### Tailing Log Files
 Some programs (like nginx) insist on writing their logs to log files instead of stdout and stderr.  Although nginx can be tricked into doing the desired thing by replacing the default log files with symbolic links to /dev/stdout and /dev/stderr, we really don't know how every program out there does its logging, so **dockerfy** gives you to option of tailing as many log files as you wish to stdout and stderr via the -stdout and -stderr flags.
 
-	$ dockerfy -stdout info.log -stdout perf.log
+	$ dockerfy --stdout info.log -stdout perf.log
 
 
-If `inotify` does not work in you container, you use `-log-poll` to poll for file changes instead.
+If `inotify` does not work in you container, you use `--log-poll` to poll for file changes instead.
 
 
 

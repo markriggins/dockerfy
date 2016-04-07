@@ -20,7 +20,7 @@ func removeCmdFromOsArgs(flag string) []*exec.Cmd {
 	for i := 0; i < len(os.Args); i++ {
 
 		switch {
-		case "-"+flag == os.Args[i] && cmd == nil:
+		case ("-"+flag == os.Args[i] || "--"+flag == os.Args[i]) && cmd == nil:
 			cmd = &exec.Cmd{Stdout: os.Stdout, Stderr: os.Stderr}
 			cmds = append(cmds, cmd)
 		case "--" == os.Args[i] && cmd != nil: // End of args for this cmd

@@ -27,17 +27,17 @@ stop:
 
 run-staging: stop
 	docker run -d -p 80:80 -e DEPLOYMENT_ENV=staging --name dockerfied-nginx dockerfied-nginx \
-		     -overlay /tmp/overlays/_common/html:/usr/share/nginx/ \
-		     -overlay /tmp/overlays/MISSING/html:/usr/share/nginx/ \
-	         -overlay '/tmp/overlays/$$DEPLOYMENT_ENV/html:/usr/share/nginx/' \
+		     --overlay /tmp/overlays/_common/html:/usr/share/nginx/ \
+		     --overlay /tmp/overlays/MISSING/html:/usr/share/nginx/ \
+	         --overlay '/tmp/overlays/$$DEPLOYMENT_ENV/html:/usr/share/nginx/' \
 	         -- nginx
 	open http://$(shell docker-machine ip $(shell docker-machine active))/robots.txt
 	open http://$(shell docker-machine ip $(shell docker-machine active))
 
 run-prod: stop
 	docker run -d -p 80:80 -e DEPLOYMENT_ENV=prod --name dockerfied-nginx dockerfied-nginx \
-		     -overlay /tmp/overlays/_common/html:/usr/share/nginx/ \
-	         -overlay '/tmp/overlays/$$DEPLOYMENT_ENV/html:/usr/share/nginx/' \
+		     --overlay /tmp/overlays/_common/html:/usr/share/nginx/ \
+	         --overlay '/tmp/overlays/$$DEPLOYMENT_ENV/html:/usr/share/nginx/' \
 	         -- nginx
 	open http://$(shell docker-machine ip $(shell docker-machine active))/robots.txt
 
@@ -50,9 +50,9 @@ run-prod-secrets: stop
 				-v $(PWD):/secrets \
 				-e SECRETS_FILE=/secrets/secrets.env \
 				dockerfied-nginx \
-					-overlay /tmp/overlays/_common/:/usr/share/nginx/ \
-					-overlay '/tmp/overlays/{{ .Env.DEPLOYMENT_ENV }}/html:/usr/share/nginx/' \
-					-template '/secrets/secrets.html.tmpl:/usr/share/nginx/html/secrets.html' \
+					--overlay /tmp/overlays/_common/:/usr/share/nginx/ \
+					--overlay '/tmp/overlays/{{ .Env.DEPLOYMENT_ENV }}/html:/usr/share/nginx/' \
+					--template '/secrets/secrets.html.tmpl:/usr/share/nginx/html/secrets.html' \
  			        -- nginx 
 	open http://$(shell docker-machine ip $(shell docker-machine active))/secrets.html
 
@@ -70,10 +70,10 @@ run-zombie-test:
 	@docker rm -f dockerfied-nginx 2>/dev/null || true
 	@echo "\nRun zombie-maker inside dockerfied-nginx"
 	@echo "--------------------------------------------------------------------------"
-	docker run -d --name dockerfied-nginx dockerfied-nginx -verbose -reap -reap-poll-interval 2s \
-		-run zombie-maker 10 1 -- \
-		-run sleep 3 -- \
-		-run ps -ef -- \
+	docker run -d --name dockerfied-nginx dockerfied-nginx --verbose --reap --reap-poll-interval 2s \
+		--run zombie-maker 10 1 -- \
+		--run sleep 3 -- \
+		--run ps -ef -- \
 		sleep 120 >/dev/null
 	@sleep 5
 	@echo "\nPs -ef looking initial zombies"
@@ -102,7 +102,7 @@ run-service-stops-too-soon-test:
 	@echo "################################################################################"
 	@docker rm -f dockerfied-nginx 2>/dev/null || true
 	docker run -d -it --name dockerfied-nginx dockerfied-nginx -verbose \
-		-start bash -c 'sleep 5 && echo "service exiting"' -- \
+		--start bash -c 'sleep 5 && echo "service exiting"' -- \
 		sleep 10 >/dev/null
 	@sleep 7
 	docker logs dockerfied-nginx 2>&1 | egrep -q 'Service.*stopped' 
@@ -116,9 +116,9 @@ run-primary-stops-while-service-is-running-test:
 	@echo "################################################################################"
 	@docker rm -f dockerfied-nginx 2>/dev/null || true
 	docker run -d -it --name dockerfied-nginx dockerfied-nginx -verbose \
-		-start bash -c 'sleep 10 && echo "ERROR: service-1 STILL RUNNING"' -- \
-		-start bash -c 'sleep 10 && echo "ERROR: service-2 STILL RUNNING"' -- \
-		-start bash -c 'sleep 10 && echo "ERROR: service-3 STILL RUNNING"' -- \
+		--start bash -c 'sleep 10 && echo "ERROR: service-1 STILL RUNNING"' -- \
+		--start bash -c 'sleep 10 && echo "ERROR: service-2 STILL RUNNING"' -- \
+		--start bash -c 'sleep 10 && echo "ERROR: service-3 STILL RUNNING"' -- \
 		sleep 5 >/dev/null
 	@sleep 7
 	@docker logs dockerfied-nginx 2>&1  | egrep -q 'Primary Command.*stopped'
@@ -132,9 +132,9 @@ run-before-primary-test:
 	@echo "################################################################################"
 	@docker rm -f dockerfied-nginx 2>/dev/null || true
 	docker run -d -it --name dockerfied-nginx dockerfied-nginx -verbose \
-		-run bash -c 'sleep 3; echo "1 DONE"' -- \
-		-run bash -c 'sleep 2; echo "2 DONE"' -- \
-		-run bash -c 'echo "3 DONE"' -- \
+		--run bash -c 'sleep 3; echo "1 DONE"' -- \
+		--run bash -c 'sleep 2; echo "2 DONE"' -- \
+		--run bash -c 'echo "3 DONE"' -- \
 		bash -c "sleep 4; echo '4 PRIMARY COMMAND DONE'"
 	@sleep 15
 	docker logs dockerfied-nginx 2>&1 | egrep -q '^1 DONE' 
