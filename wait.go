@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 )
 
@@ -20,6 +21,8 @@ func waitForDependencies() {
 
 	go func() {
 		for _, host := range waitFlag {
+			host = os.ExpandEnv(string_template_eval(host))
+
 			log.Println("Waiting for host:", host)
 			u, err := url.Parse(host)
 			if err != nil {
