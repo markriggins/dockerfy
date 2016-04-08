@@ -24,7 +24,7 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
                     "--secrets", "/secrets/secrets.env",                                                \
                     "--overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",         \
                     "--template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         \
-                    "--wait", "https://${MYSQLSERVER}:${MYSQLPORT", "-timeout", "60",                   \
+                    "--wait", "https://${MYSQLSERVER}:${MYSQLPORT", "--timeout", "60s",                 \
                     "--run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",     \
                     "--start", "/app/bin/cache-cleaner-daemon", "-p", "{{ .Secret.DB_PASSWORD }}", "--",\
                     "--reap",                                                                           \
@@ -47,7 +47,7 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
       command: [ 
         "--overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",         
         "--template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         
-        "--wait", "https://${MYSQLSERVER}:${MYSQLPORT", "-timeout", "60",                   
+        "--wait", "https://${MYSQLSERVER}:${MYSQLPORT", "--timeout", "60s",                   
         "--run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",     
         "--start", "/app/bin/cache-cleaner-daemon", "-p", "{{ .Secret.DB_PASSWORD }}", "--",
         "--reap",                                                                           
@@ -60,7 +60,7 @@ The above example will run the nginx program inside a docker container, but **be
 1. **Sparsely Overlay** files from the application's /app/overlays directory tree for the ${DEPLOYMENT_ENV} **onto** /usr/share/nginx/html.  For example, the robots.txt file might be restrictive in the "staging" deployment environment, but relaxed in "production", so the application can maintain separate copies of robots.txt for each deployment environment: /app/overlays/staging/robots.txt, and /app/overlays/production/robots.txt
 2. **Load secret settings** from a file a /secrets/secrets.env, that become available for use in templates as {{ .Secret.**VARNAME** }}
 3. **Execute the nginx.conf.tmpl template**. This template uses the powerful go language templating features to substitute environment variables and secret settings directly into the nginx.conf file. (Which is handy since nginx doesn't read the environment itself.)  Every occurance of {{ .Env.**VARNAME** }} will be replaced with the value of $VARNAME, and every {{ .Secret.**VARNAME** }} will be replaced with the secret value of VARNAME. 
-4. **Wait** for the http://${MYSQLSERVER} server to start accepting requests on port ${MYSQLPORT}
+4. **Wait** for the http://${MYSQLSERVER} server to start accepting requests on port ${MYSQLPORT} for up to 60 seconds
 4. **Run migrate_lock** a program to perform a Django/MySql database migration to update the database schema, and wait for it to finish.
 5. **Start the cache-cleaner-daemon**, which will run in the background presumably cleaning up stale cache files while nginx runs
 6. **Start Reaping Zombie processes** under a separate goroutine in case the cache-cleaner-deamon loses track of its child processes.
@@ -229,7 +229,7 @@ It is common when using tools like [Docker Compose](https://docs.docker.com/comp
 
 **Dockerfy** gives you the ability to wait for services on a specified protocol (`tcp`, `tcp4`, `tcp6`, `http`, and `https`) before running commands, starting services, or starting your application
 
-	$ dockerfy --wait https://$MYSQLSERVER:$MYSQLPORT -timeout 120 ...
+	$ dockerfy --wait https://$MYSQLSERVER:$MYSQLPORT --timeout 120s ...
 	
 You can specify multiple dependancies by repeating the -wait flag.  If the dependancies fail to become available before the timeout (which defaults to 10 seconds), then dockery will exit, and your primary command will not be run.
 
