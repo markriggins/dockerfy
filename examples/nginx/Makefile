@@ -50,9 +50,11 @@ run-prod-secrets: stop
 				-v $(PWD):/secrets \
 				-e SECRETS_FILE=/secrets/secrets.env \
 				dockerfied-nginx \
+					--verbose \
 					--overlay /tmp/overlays/_common/:/usr/share/nginx/ \
 					--overlay '/tmp/overlays/{{ .Env.DEPLOYMENT_ENV }}/html:/usr/share/nginx/' \
 					--template '/secrets/secrets.html.tmpl:/usr/share/nginx/html/secrets.html' \
+					--secrets "/secrets/secrets.json" \
  			        -- nginx 
 	open http://$(shell docker-machine ip $(shell docker-machine active))/secrets.html
 
@@ -101,7 +103,7 @@ run-service-stops-too-soon-test:
 	@echo "\tWhen the service exits, the primary command should also stop"
 	@echo "################################################################################"
 	@docker rm -f dockerfied-nginx 2>/dev/null || true
-	docker run -d -it --name dockerfied-nginx dockerfied-nginx -verbose \
+	docker run -d -it --name dockerfied-nginx dockerfied-nginx --verbose \
 		--start bash -c 'sleep 5 && echo "service exiting"' -- \
 		sleep 10 >/dev/null
 	@sleep 7
@@ -115,7 +117,7 @@ run-primary-stops-while-service-is-running-test:
 	@echo "\tThis should kill the services before they have a chance to finish"
 	@echo "################################################################################"
 	@docker rm -f dockerfied-nginx 2>/dev/null || true
-	docker run -d -it --name dockerfied-nginx dockerfied-nginx -verbose \
+	docker run -d -it --name dockerfied-nginx dockerfied-nginx --verbose \
 		--start bash -c 'sleep 10 && echo "ERROR: service-1 STILL RUNNING"' -- \
 		--start bash -c 'sleep 10 && echo "ERROR: service-2 STILL RUNNING"' -- \
 		--start bash -c 'sleep 10 && echo "ERROR: service-3 STILL RUNNING"' -- \
@@ -131,7 +133,7 @@ run-before-primary-test:
 	@echo "\tBefore the service starts, the -run commands should finish in order"
 	@echo "################################################################################"
 	@docker rm -f dockerfied-nginx 2>/dev/null || true
-	docker run -d -it --name dockerfied-nginx dockerfied-nginx -verbose \
+	docker run -d -it --name dockerfied-nginx dockerfied-nginx --verbose \
 		--run bash -c 'sleep 3; echo "1 DONE"' -- \
 		--run bash -c 'sleep 2; echo "2 DONE"' -- \
 		--run bash -c 'echo "3 DONE"' -- \
@@ -148,9 +150,22 @@ run-primary-service-exits:
 	@echo "\n\nrun-primary-service-exits:"
 	@echo "\tVerify that when the primary service finishes, the container exits"
 	@echo "################################################################################"
-	docker run -it --name dockerfied-nginx-container dockerfied-nginx -verbose echo DONE 
+	docker run -it --name dockerfied-nginx-container dockerfied-nginx --verbose echo DONE 
 	docker inspect --format '{{ .State.Status }}' dockerfied-nginx-container  | egrep -q exited
 	@docker rm -f dockerfied-nginx-container 2>/dev/null || true
 	@echo "run-primary-service-exits PASSED"
+
+
+run-wait-test:
+	@docker rm -f dockerfied-nginx-container 2>/dev/null || true
+	@echo "\n\nrun-wait-test:"
+	@echo "\tVerify that when the primary command runs after we wait for something"
+	@echo "################################################################################"
+	docker run -it --name dockerfied-nginx-container dockerfied-nginx --verbose \
+		--wait http://amazon.com \
+		echo DONE
+	docker logs dockerfied-nginx-container 2>&1 | egrep -q '^DONE'
+	@echo "run-wait-test PASSED"
+	
 
 

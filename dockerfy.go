@@ -42,7 +42,7 @@ var (
 	reapPollIntervalFlag time.Duration
 	reapFlag             bool
 	runsFlag             sliceVar
-	secretsFlag          string
+	secretsFlag          sliceVar
 	startsFlag           sliceVar
 	stderrTailFlag       sliceVar
 	stdoutTailFlag       sliceVar
@@ -121,7 +121,7 @@ func main() {
 	flag.BoolVar(&logPollFlag, "log-poll", false, "use polling to tail log files")
 	flag.Var(&templatesFlag, "template", "Template (/template:/dest). Can be passed multiple times")
 	flag.Var(&overlaysFlag, "overlay", "overlay (/src:/dest). Can be passed multiple times")
-	flag.StringVar(&secretsFlag, "secrets", "", "secrets (path to secrets.env file)")
+	flag.Var(&secretsFlag, "secrets", "secrets (path to secrets.env file). Can be passed multiple times")
 	flag.Var(&runsFlag, "run", "run (cmd [opts] [args] --) Can be passed multiple times")
 	flag.Var(&startsFlag, "start", "start (cmd [opts] [args] --) Can be passed multiple times")
 	flag.BoolVar(&reapFlag, "reap", false, "reap all child processes")

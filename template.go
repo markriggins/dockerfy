@@ -3,8 +3,10 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/url"
 	"os"
@@ -42,45 +44,72 @@ func (c *TemplateContext) Secret() map[string]string {
 	c.secrets = make(map[string]string)
 
 	// Secrets can come from (in order of precedence):
-	// 1) -secrets <file>
+	// 1) -secrets <file> (one or more times)
 	// 2) $SECRETS_FILE
-	secretsFileName := os.ExpandEnv(string_template_eval(secretsFlag))
 
-	if secretsFileName == "" {
-		secretsFileName = os.Getenv("SECRETS_FILE")
-	}
-	if secretsFileName == "" {
-		return c.secrets
+	secretsFileNames := secretsFlag[:]
+	if os.Getenv("SECRETS_FILE") != "" {
+		secretsFileNames = append(secretsFileNames, os.Getenv("SECRETS_FILE"))
 	}
 
-	secretsFile, err := os.Open(secretsFileName)
-	if err != nil {
-		log.Fatalf("Error opening secrets file '%s':%s", secretsFileName, err)
-	}
-	defer secretsFile.Close()
-	bSecretsFile := bufio.NewReader(secretsFile)
+	for _, secretsFileName := range secretsFileNames {
 
-	for {
-		line_bytes, isPrefix, err := bSecretsFile.ReadLine()
-		line := string(line_bytes)
-		if err == io.EOF {
-			break
-		}
+		secretsFile, err := os.Open(secretsFileName)
 		if err != nil {
-			log.Fatalf("Error reading secrets file '%s':%s", secretsFileName, err)
+			log.Fatalf("Error opening secrets file '%s':%s", secretsFileName, err)
 		}
-		if isPrefix {
-			log.Fatal("Error secrets file too long: ", secretsFileName)
+		if verboseFlag {
+			log.Printf("Loading secrets from: %s:", secretsFileName)
 		}
-		if strings.HasPrefix(line, "#") {
-			continue
+		defer secretsFile.Close()
+		bSecretsFile := bufio.NewReader(secretsFile)
+
+		if strings.HasSuffix(secretsFileName, ".env") {
+			for {
+				line_bytes, isPrefix, err := bSecretsFile.ReadLine()
+				line := string(line_bytes)
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					log.Fatalf("Error reading secrets file '%s':%s", secretsFileName, err)
+				}
+				if isPrefix {
+					log.Fatal("Error secrets file too long: ", secretsFileName)
+				}
+				if strings.HasPrefix(line, "#") {
+					continue
+				}
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) < 2 {
+					continue
+				}
+				key, value := parts[0], strings.Trim(strings.TrimSpace(parts[1]), `'"`)
+				c.secrets[key] = value
+				if verboseFlag {
+					log.Printf(" %s", key)
+				}
+			}
+		} else if strings.HasSuffix(secretsFileName, ".json") {
+			jsonData, err := ioutil.ReadAll(secretsFile)
+			if err != nil {
+				log.Fatalf("Error reading JSON secrets file '%s':%s", secretsFileName, err)
+			}
+			var secrets map[string]string
+			err = json.Unmarshal(jsonData, &secrets)
+			if err != nil {
+				log.Fatalf("Error reading JSON secrets file '%s':%s", secretsFileName, err)
+			}
+			for key, value := range secrets {
+				c.secrets[key] = value
+				if verboseFlag {
+					log.Printf(" %s", key)
+				}
+			}
+		} else {
+			log.Fatalf("Unknown file extension '%s' must end with .env or .json\n", secretsFileName)
 		}
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) < 2 {
-			continue
-		}
-		key, value := parts[0], strings.Trim(strings.TrimSpace(parts[1]), `'"`)
-		c.secrets[key] = value
+		log.Println("")
 	}
 
 	return c.secrets

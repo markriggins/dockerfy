@@ -24,7 +24,7 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
                     "--secrets", "/secrets/secrets.env",                                                \
                     "--overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",         \
                     "--template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         \
-                    "--wait", "https://${MYSQLSERVER}:${MYSQLPORT", "--timeout", "60s",                 \
+                    "--wait", "tcp://${MYSQLSERVER}:${MYSQLPORT", "--timeout", "60s",                   \
                     "--run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",     \
                     "--start", "/app/bin/cache-cleaner-daemon", "-p", "{{ .Secret.DB_PASSWORD }}", "--",\
                     "--reap",                                                                           \
@@ -47,7 +47,7 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
       command: [ 
         "--overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",         
         "--template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         
-        "--wait", "https://${MYSQLSERVER}:${MYSQLPORT", "--timeout", "60s",                   
+        "--wait", "tcp://${MYSQLSERVER}:${MYSQLPORT", "--timeout", "60s",                   
         "--run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",     
         "--start", "/app/bin/cache-cleaner-daemon", "-p", "{{ .Secret.DB_PASSWORD }}", "--",
         "--reap",                                                                           
@@ -227,9 +227,11 @@ If you're running in development mode and mounting -v $PWD:/app in your docker c
 
 It is common when using tools like [Docker Compose](https://docs.docker.com/compose/) to depend on services in other linked containers, however oftentimes relying on [links](https://docs.docker.com/compose/compose-file/#links) is not enough - whilst the container itself may have _started_, the _service(s)_ within it may not yet be ready - resulting in shell script hacks to work around race conditions.
 
-**Dockerfy** gives you the ability to wait for services on a specified protocol (`tcp`, `tcp4`, `tcp6`, `http`, and `https`) before running commands, starting services, or starting your application
+**Dockerfy** gives you the ability to wait for services on a specified protocol (`tcp`, `tcp4`, `tcp6`, `http`, and `https`) before running commands, starting services, or starting your application.   
 
-	$ dockerfy --wait https://$MYSQLSERVER:$MYSQLPORT --timeout 120s ...
+NOTE: MySql server is not an HTTP server, so use the tcp protocol instead of http
+
+	$ dockerfy --wait tcp://$MYSQLSERVER:$MYSQLPORT --timeout 120s ...
 	
 You can specify multiple dependancies by repeating the -wait flag.  If the dependancies fail to become available before the timeout (which defaults to 10 seconds), then dockery will exit, and your primary command will not be run.
 
