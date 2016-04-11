@@ -87,7 +87,7 @@ func (c *TemplateContext) Secret() map[string]string {
 				key, value := parts[0], strings.Trim(strings.TrimSpace(parts[1]), `'"`)
 				c.secrets[key] = value
 				if verboseFlag {
-					log.Printf(" %s", key)
+					log.Printf("loaded secret: %s", key)
 				}
 			}
 		} else if strings.HasSuffix(secretsFileName, ".json") {
@@ -103,7 +103,7 @@ func (c *TemplateContext) Secret() map[string]string {
 			for key, value := range secrets {
 				c.secrets[key] = value
 				if verboseFlag {
-					log.Printf(" %s", key)
+					log.Printf("loaded secret: %s", key)
 				}
 			}
 		} else {
