@@ -3,17 +3,18 @@
 
 TAG:=`git describe --abbrev=0 --tags`
 
-build: zombie-maker .mk.nginx-with-dockerfy
-	cd ../..; goxc -os linux -arch amd64
+build: zombie-maker  .mk.nginx-with-dockerfy
 	docker build -t dockerfied-nginx .
 
 push: .mk.nginx-with-dockerfy
 	docker push markriggins/nginx-with-dockerfy
 
 .mk.nginx-with-dockerfy: Dockerfile.nginx-with-dockerfy
-	cp -f $(shell bash -xc 'find $(GOPATH)/bin -name dockerfy_linux_amd64.tar.gz| head -1') .dockerfy_linux_amd64.tar.gz
+	cd ../..; make dist
+	cp -f ../../dist/linux/amd64/dockerfy .dockerfy-linux-amd64
 	docker build --file Dockerfile.nginx-with-dockerfy -t markriggins/nginx-with-dockerfy .
 	docker tag markriggins/nginx-with-dockerfy markriggins/nginx-with-dockerfy:$(TAG)
+
 
 
 zombie-maker: zombie-maker.c
@@ -109,6 +110,7 @@ run-service-stops-too-soon-test:
 	@sleep 7
 	docker logs dockerfied-nginx 2>&1 | egrep -q 'Service.*stopped' 
 	@echo "\t Service Stopped"
+	@docker rm -f dockerfied-nginx 2>/dev/null || true
 	@echo "run-service-stops-too-soon-test PASSED"
 
 
@@ -125,6 +127,7 @@ run-primary-stops-while-service-is-running-test:
 	@sleep 7
 	@docker logs dockerfied-nginx 2>&1  | egrep -q 'Primary Command.*stopped'
 	@docker logs dockerfied-nginx 2>&1  | egrep -q '^ERROR:.*STILLRUNNING' && exit 1 || true
+	@docker rm -f dockerfied-nginx 2>/dev/null || true
 	@echo "run-primary-stops-while-service-is-running-test PASSED"
 	
 
@@ -143,6 +146,7 @@ run-before-primary-test:
 	docker logs dockerfied-nginx 2>&1 | egrep -q '^2 DONE' 
 	docker logs dockerfied-nginx 2>&1 | egrep -q '^3 DONE' 
 	docker logs dockerfied-nginx 2>&1 | egrep -q '^4 PRIMARY COMMAND DONE' 
+	@docker rm -f dockerfied-nginx 2>/dev/null || true
 	@echo "run-before-primary-test PASSED"
 
 run-primary-service-exits:
@@ -166,6 +170,22 @@ run-wait-test:
 		echo DONE
 	docker logs dockerfied-nginx-container 2>&1 | egrep -q '^DONE'
 	@echo "run-wait-test PASSED"
-	
+
+run-user-option-test:
+	@docker rm -f dockerfied-nginx-container 2>/dev/null || true
+	@echo "\n\nrun-user-option-test:"
+	@echo "\tVerify that the --user option affects the user account of subsequent commands"
+	@echo "################################################################################"
+	docker run -d -it --name dockerfied-nginx-container dockerfied-nginx \
+		--run echo -n "MAIL:" -- --user mail  --run id -a -- \
+		--run echo -n "ROOT:" -- --user root  --run id -a -- \
+		--run echo -n "UUCP:" -- --user uucp  --run id -a -- \
+		--run echo -n "PRIMARY:" -- \
+		id -a
+	@sleep 5
+	docker logs dockerfied-nginx-container 2>/dev/null| egrep -v "^dockerfy"
+	@docker rm -f dockerfied-nginx 2>/dev/null || true
+	@echo "run-user-option-test PASSED"
+
 
 

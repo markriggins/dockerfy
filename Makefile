@@ -10,6 +10,7 @@ dockerfy:
 	echo "Building dockerfy"
 	go install -ldflags "$(LDFLAGS)"
 
+
 dist-clean:
 	rm -rf dist
 	rm -f dockerfy-linux-*.tar.gz

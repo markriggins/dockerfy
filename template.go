@@ -222,7 +222,9 @@ func generateFile(templatePath, destPath string) bool {
 			log.Fatalf("unable to create %s", err)
 		}
 		defer dest.Close()
-		log.Printf("Template %s --> %s\n", templatePath, destPath)
+		if verboseFlag {
+			log.Printf("Template %s --> %s\n", templatePath, destPath)
+		}
 	}
 
 	err = tmpl.ExecuteTemplate(dest, filepath.Base(templatePath), &TemplateContext{})

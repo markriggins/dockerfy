@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/context"
@@ -47,10 +48,12 @@ var (
 	stderrTailFlag       sliceVar
 	stdoutTailFlag       sliceVar
 	templatesFlag        sliceVar
+	usersFlag            sliceVar
 	verboseFlag          bool
 	versionFlag          bool
 	waitFlag             hostFlagsVar
 	waitTimeoutFlag      time.Duration
+	helpFlag             bool
 )
 
 func (i *hostFlagsVar) String() string {
@@ -72,9 +75,17 @@ func (s *sliceVar) String() string {
 }
 
 func usage() {
-	println(`Usage: dockerfy [options] [command]
+	println(`Usage: dockerfy [options] command [command options]
 
-Utility to simplify running applications in docker containers
+Try --help for a list of options and helpful examples
+		`)
+}
+
+func help() {
+
+	println("Dockerfy -- a utility to initialize and run applications in docker containers ")
+	usage()
+	println(`
 
 Options:`)
 	flag.PrintDefaults()
@@ -89,26 +100,31 @@ Arguments:
 	println(`   Generate /etc/nginx/nginx.conf using nginx.tmpl as a template, tail /var/log/nginx/access.log
    and /var/log/nginx/error.log, waiting for a website to become available on port 8000 and start nginx:`)
 	println(`
-       dockerfy -template nginx.tmpl:/etc/nginx/nginx.conf \
-   	     -overlay overlays/_common/html:/usr/share/nginx/ \
-   	     -overlay overlays/$DEPLOYMENT_ENV/html:/usr/share/nginx/ \`)
-	println(`   	     -stdout /var/log/nginx/access.log \
-             -stderr /var/log/nginx/error.log \
-             -wait tcp://web:8000 nginx \
-             -secrets /secrets/secrets.env
+       dockerfy --template nginx.tmpl:/etc/nginx/nginx.conf \
+   	     --overlay overlays/_common/html:/usr/share/nginx/ \
+   	     --overlay overlays/$DEPLOYMENT_ENV/html:/usr/share/nginx/ \`)
+	println(`   	     --stdout /var/log/nginx/access.log \
+             --stderr /var/log/nginx/error.log \
+             --wait tcp://web:8000 nginx \
+             --secrets /secrets/secrets.env
 	`)
 	println(`   Run a command and reap any zombie children that the command forgets to reap
 
-       dockerfy -reap command 
+       dockerfy --reap command 
 	     `)
 	println(`   Run /bin/echo before the main command runs:
        
-       dockerfy -run /bin/echo -e "Starting -- command\n\n" 
+       dockerfy --run /bin/echo -e "Starting -- command\n\n" 
+	     `)
+
+	println(`   Run or start all subsequent commands as user 'nginx'
+
+       dockerfy --user nginx /usr/bin/id 
 	     `)
 
 	println(`   Start /bin/service before the main command runs and exit if the service fails:
        
-       dockerfy -start /bin/sleep 5 -- /bin/service 
+       dockerfy --start /bin/sleep 5 -- /bin/service 
 	     `)
 	println(`For more information, see https://github.com/markriggins/dockerfy`)
 }
@@ -118,6 +134,7 @@ func main() {
 	log.SetPrefix("dockerfy: ")
 
 	flag.BoolVar(&versionFlag, "version", false, "show version")
+	flag.BoolVar(&helpFlag, "help", false, "print help message")
 	flag.BoolVar(&logPollFlag, "log-poll", false, "use polling to tail log files")
 	flag.Var(&templatesFlag, "template", "Template (/template:/dest). Can be passed multiple times")
 	flag.Var(&overlaysFlag, "overlay", "overlay (/src:/dest). Can be passed multiple times")
@@ -133,11 +150,16 @@ func main() {
 	flag.DurationVar(&waitTimeoutFlag, "timeout", 10*time.Second, "Host wait timeout duration, defaults to 10s")
 	flag.DurationVar(&reapPollIntervalFlag, "reap-poll-interval", 120*time.Second, "Polling interval for reaping zombies")
 
-	var startCmds = removeCmdFromOsArgs("start")
-	var runCmds = removeCmdFromOsArgs("run")
+	var commands = removeCommandsFromOsArgs()
 
 	flag.Usage = usage
+
 	flag.Parse()
+
+	if helpFlag {
+		help()
+		os.Exit(1)
+	}
 
 	if versionFlag {
 		fmt.Println(buildVersion)
@@ -174,10 +196,17 @@ func main() {
 				src += "*"
 			}
 
-			log.Printf("overlaying %s --> %s", src, dest)
+			if verboseFlag {
+				log.Printf("overlaying %s --> %s", src, dest)
+			}
+
 			if matches, err := filepath.Glob(src); err == nil {
 				for _, dir := range matches {
-					cmd = exec.Command("cp", "-rv", dir, dest)
+					cp_opts := "-r"
+					if verboseFlag {
+						cp_opts = "-rv"
+					}
+					cmd = exec.Command("cp", cp_opts, dir, dest)
 					cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 					if err := cmd.Run(); err != nil {
 						log.Fatal(err)
@@ -217,15 +246,18 @@ func main() {
 	}
 
 	// Process -start and -run flags
-	for _, cmd := range runCmds {
+	for _, cmd := range commands.run {
 
-		log.Printf("Pre-Running: `%s`\n", toString(cmd))
-		wg.Add(1)
+		if verboseFlag {
+			log.Printf("Pre-Running: `%s`\n", toString(cmd))
+		}
 		// Run to completion, but do not cancel our ctx context
-		runCmd(context.Background(), func() {}, cmd.Path, cmd.Args[1:]...)
+		runCmd(context.Background(), func() {}, cmd)
 	}
-	for _, cmd := range startCmds {
-		log.Printf("Starting Service: `%s`\n", toString(cmd))
+	for _, cmd := range commands.start {
+		if verboseFlag {
+			log.Printf("Starting Service: `%s`\n", toString(cmd))
+		}
 		wg.Add(1)
 
 		// Start each service, and bind them to our ctx context so
@@ -234,17 +266,24 @@ func main() {
 		go runCmd(ctx, func() {
 			log.Printf("Service `%s` stopped\n", toString(cmd))
 			cancel()
-		}, cmd.Path, cmd.Args[1:]...)
+		}, cmd)
 	}
 
 	if flag.NArg() > 0 {
 		var cmdString = strings.Join(flag.Args(), " ")
-		log.Printf("Running Primary Command: `%s`\n", cmdString)
+		if verboseFlag {
+			log.Printf("Running Primary Command: `%s`\n", cmdString)
+		}
 		wg.Add(1)
+
+		primary_command := exec.Command(flag.Arg(0), flag.Args()[1:]...)
+		primary_command.SysProcAttr = &syscall.SysProcAttr{Credential: commands.credential}
 		go runCmd(ctx, func() {
 			log.Printf("Primary Command `%s` stopped\n", cmdString)
 			cancel()
-		}, flag.Arg(0), flag.Args()[1:]...)
+		}, primary_command)
+	} else {
+		cancel()
 	}
 
 	if reapFlag {

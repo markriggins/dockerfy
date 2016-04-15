@@ -11,10 +11,12 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
 4. Secrets injected into configuration files (without leaking them to the environment)
 5. Waiting for dependencies (any server and port) to become available before the primary command starts
 6. Tailing log files to the container's stdout and/or stderr
-8. Running commands before the primary command begins
-7. Starting Services -- and shutting down the container if they fail
+7. Running commands before the primary command begins
+8. Starting Services -- and shutting down the container if they fail
 9. Propagating signals to child processes
-9. Reaping Zombie (defunct) processes
+10. Reaping Zombie (defunct) processes
+11. Running services and commands and various user accounts
+
 
 ## Dockerfile Example
 
@@ -28,6 +30,7 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
                     "--run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",     \
                     "--start", "/app/bin/cache-cleaner-daemon", "-p", "{{ .Secret.DB_PASSWORD }}", "--",\
                     "--reap",                                                                           \
+                    "--user", "nobody",                                                                 \
                   	"nginx",  "-g",  "daemon off;" ]
 
 ## equivalent docker-compose.yml Example
@@ -50,7 +53,8 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
         "--wait", "tcp://${MYSQLSERVER}:${MYSQLPORT", "--timeout", "60s",                   
         "--run", "/app/bin/migrate_lock --server='${MYSQLSERVER}:${MYSQLPORT}'",  "--",     
         "--start", "/app/bin/cache-cleaner-daemon", "-p", "{{ .Secret.DB_PASSWORD }}", "--",
-        "--reap",                                                                           
+        "--reap",   
+        "--user", "nobody", 
         '--', 'nginx', '-g', 'daemon off;' ]
 
 			
@@ -61,12 +65,12 @@ The above example will run the nginx program inside a docker container, but **be
 2. **Load secret settings** from a file a /secrets/secrets.env, that become available for use in templates as {{ .Secret.**VARNAME** }}
 3. **Execute the nginx.conf.tmpl template**. This template uses the powerful go language templating features to substitute environment variables and secret settings directly into the nginx.conf file. (Which is handy since nginx doesn't read the environment itself.)  Every occurance of {{ .Env.**VARNAME** }} will be replaced with the value of $VARNAME, and every {{ .Secret.**VARNAME** }} will be replaced with the secret value of VARNAME. 
 4. **Wait** for the http://${MYSQLSERVER} server to start accepting requests on port ${MYSQLPORT} for up to 60 seconds
-4. **Run migrate_lock** a program to perform a Django/MySql database migration to update the database schema, and wait for it to finish.
-5. **Start the cache-cleaner-daemon**, which will run in the background presumably cleaning up stale cache files while nginx runs
-6. **Start Reaping Zombie processes** under a separate goroutine in case the cache-cleaner-deamon loses track of its child processes.
-7. **Run nginx** with its customized nginx.conf file and html
-8. **Propagate Signals** to all processes, so the container can exit cleanly on SIGHUP or SIGINT
-9. **Monitor Processes** and exit if nginx or the cache-cleaner-daemon dies
+5. **Run migrate_lock** a program to perform a Django/MySql database migration to update the database schema, and wait for it to finish.
+6. **Start the cache-cleaner-daemon**, which will run in the background presumably cleaning up stale cache files while nginx runs
+7. **Start Reaping Zombie processes** under a separate goroutine in case the cache-cleaner-deamon loses track of its child processes.
+8. **Run nginx** with its customized nginx.conf file and html as user `nobody`
+9. **Propagate Signals** to all processes, so the container can exit cleanly on SIGHUP or SIGINT
+10. **Monitor Processes** and exit if nginx or the cache-cleaner-daemon dies
 
 
 This all assumes that the /secrets volume was mounted and the environment variables $MYSQLSERVER, $MYSQLPORT
@@ -74,7 +78,7 @@ and $DEPLOYMENT_ENV were set when the container started.  Note that **dockerfy**
 
 Note that the `ps -ef` command would list the unexpanded argument '{{ .Secret.DB_PASSWORD }}', not the actual password
 
-The "--" argument is used to signify the end of arguments for a -start or -run command.
+The "--" argument is used to signify the end of arguments for a --start or --run command.
 
 
 # Typical Use-Case
@@ -114,7 +118,7 @@ The entire ./overlays files must be COPY'd into the Docker image (usually along 
 
 	COPY / /app
 	
-Then the desired alternative for the files can be chosen at runtime use the -overlay *src:dest* option
+Then the desired alternative for the files can be chosen at runtime use the --overlay *src:dest* option
 
 	$ dockefy --overlay /app/overlays/_commmon/html:/usr/share/nginx/ \
 		      --overlay /app/overlays/$DEPLOYMENT_ENV/html:/usr/share/nginx/ \
@@ -233,8 +237,7 @@ NOTE: MySql server is not an HTTP server, so use the tcp protocol instead of htt
 
 	$ dockerfy --wait tcp://$MYSQLSERVER:$MYSQLPORT --timeout 120s ...
 	
-You can specify multiple dependancies by repeating the -wait flag.  If the dependancies fail to become available before the timeout (which defaults to 10 seconds), then dockery will exit, and your primary command will not be run.
-
+You can specify multiple dependancies by repeating the --wait flag.  If the dependancies fail to become available before the timeout (which defaults to 10 seconds), then dockery will exit, and your primary command will not be run.
 
 ### Running Commands 
 The `--run` option gives you the opportunity to run commands **after** the overlays, secrets and templates have been processed, but **before** the primary program begins.  You can run anything you like, even bash scripts like this:
@@ -257,6 +260,20 @@ The `--start` option gives you the opportunity to start a commands as a service 
 All options up to but not including the '--' will be passed to the command.  You can start as many services as you like, they will all be started in the same order as how they were provided on the command line, and all commands must continue **successfully** or **dockerfy** will
 stop your primary command and exit, and the container will stop.
 
+### Switching User Accounts
+The `--user` option gives you the ability specify which user accounts with which to run commands or start services.  The `--user` flag takes either a username or UID as its argument, and affects all subsequent commands.
+
+  $ dockerfy \
+    --user mark --run id -F -- \
+    --user bob  --run id -F -- \
+    --user 0    --run id -F -- \
+    id -a 
+
+The above command will first run the `id -F` command as user "mark", which will print mark's full name "Mark Riggins".
+Then it will print bob's full name.  Next it will print the full name of the account with user id 0, which happens to be "root".  Finally the primary command `id` will run with as the user account of the `last` invokation of the `--user` option, giving us the full id information for the root account.
+
+The **dockerfy** command itself will continue to run as the root user so it will have permission to monitor and signal any services that were started.
+
 ### Reaping Zombies
 Long-lived containers should with services use the `--reap` option to clean up any zombie processes that might arise if a service fails to wait for its child processes to die.  Otherwise, eventually the process table can fill up and your container will become unresponsive.  Normally the init daemon would do this important task, but docker containers do not have an init daemon, so **dockerfy** will assume the responsibility.
 
@@ -266,9 +283,9 @@ Note that in order for this work fully, **dockerfy** should be the primary proce
 **Dockerfy** passes SIGHUP, SIGINT, SIGQUIT, SIGTERM and SIGKILL to all commands and services, giving them a brief chance to respond, and then kills them and exits.  This allows your container to exit gracefully, and completely shut down services, and not hang when it us run in interactive mode via `docker run -it ...` when you type ^C
 
 ### Tailing Log Files
-Some programs (like nginx) insist on writing their logs to log files instead of stdout and stderr.  Although nginx can be tricked into doing the desired thing by replacing the default log files with symbolic links to /dev/stdout and /dev/stderr, we really don't know how every program out there does its logging, so **dockerfy** gives you to option of tailing as many log files as you wish to stdout and stderr via the -stdout and -stderr flags.
+Some programs (like nginx) insist on writing their logs to log files instead of stdout and stderr.  Although nginx can be tricked into doing the desired thing by replacing the default log files with symbolic links to /dev/stdout and /dev/stderr, we really don't know how every program out there does its logging, so **dockerfy** gives you to option of tailing as many log files as you wish to stdout and stderr via the --stdout and --stderr flags.
 
-	$ dockerfy --stdout info.log -stdout perf.log
+	$ dockerfy --stdout info.log --stdout perf.log
 
 
 If `inotify` does not work in you container, you use `--log-poll` to poll for file changes instead.
@@ -291,7 +308,7 @@ But of course, use the latest release!
 
 
 ##Inspiration and Open Source Usage
-Dockerfy is based on the work of others, relying heavily on jwilder's templates, wait, and log tailer, [ dockerize](https://github.com/jwilder/dockerize) and  miekg's  zinit ](https://github.com/miekg/dinit) a small init-like "daemon", and other tips on stackoverflow and other places of public commentary about docker.
+Dockerfy is based on the work of others, relying heavily on jwilder's wait, and log tailer, [ dockerize](https://github.com/jwilder/dockerize) and  miekg's  dinit ](https://github.com/miekg/dinit) a small init-like "daemon", and other tips on stackoverflow and other places of public commentary about docker.
 
 The secrets injection, overlays, and commands that run before the primary command starts and the command-line syntax for running commands and starting services are unique to **dockerfy**.
 

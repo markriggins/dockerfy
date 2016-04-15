@@ -1,11 +1,6 @@
 FROM nginx:1.9
 
-COPY .dockerfy_linux_amd64.tar.gz /tmp/
-
-RUN  cd /usr/local/bin && \
-    tar -xzv --strip-components=1 -f /tmp/.d*.gz dockerfy_linux_amd64/dockerfy && \
-    rm /tmp/.d*.gz &&  \
-    echo "daemon off;" >> /etc/nginx/nginx.conf
+COPY .dockerfy-linux-amd64 /usr/local/bin/dockerfy
 
 
 ENTRYPOINT [ 'dockerfy' ]

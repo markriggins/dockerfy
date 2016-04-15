@@ -11,18 +11,22 @@ import (
 	"golang.org/x/net/context"
 )
 
-func runCmd(ctx context.Context, cancel context.CancelFunc, cmd string, args ...string) {
+func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd) {
 	defer wg.Done()
 
-	process := exec.Command(cmd, args...)
-	process.Stdin = os.Stdin
-	process.Stdout = os.Stdout
-	process.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-	// start the process
-	err := process.Start()
+	//cmd2 := exec.Command("id", "-a")
+	_ = "breakpoint"
+	//log.Println(cmd2)
+	//cmd.SysProcAttr = nil
+
+	// start the cmd
+	err := cmd.Start()
 	if err != nil {
-		log.Fatalf("Error starting command: `%s` - %s\n", toString(process), err)
+		log.Fatalf("Error starting command: `%s` - %s\n", toString(cmd), err)
 	}
 
 	// Setup signaling -- a separate channel for goroutine for each command
@@ -35,23 +39,29 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd string, args ...
 
 		select {
 		case sig := <-sigs:
-			log.Printf("Received signal: %s\n", sig)
-			signalProcessWithTimeout(process, sig)
+			if verboseFlag {
+				log.Printf("Received signal: %s\n", sig)
+			}
+			signalProcessWithTimeout(cmd, sig)
 			if cancel != nil {
 				cancel()
 			}
 		case <-ctx.Done():
-			log.Printf("Done waiting for signals")
+			if verboseFlag {
+				log.Printf("Done waiting for signals")
+			}
 			// exit when context is done
 		}
 	}()
 
-	err = process.Wait()
+	err = cmd.Wait()
 
 	if err == nil {
-		log.Printf("Command finished successfully: `%s`\n", toString(process))
+		if verboseFlag {
+			log.Printf("Command finished successfully: `%s`\n", toString(cmd))
+		}
 	} else {
-		log.Printf("Command `%s` exited with error: %s\n", toString(process), err)
+		log.Printf("Command `%s` exited with error: %s\n", toString(cmd), err)
 		// OPTIMIZE: This could be cleaner
 		// os.Exit(err.(*exec.ExitError).Sys().(syscall.WaitStatus).ExitStatus())
 	}
@@ -60,12 +70,12 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd string, args ...
 	}
 }
 
-func signalProcessWithTimeout(process *exec.Cmd, sig os.Signal) {
+func signalProcessWithTimeout(cmd *exec.Cmd, sig os.Signal) {
 	done := make(chan struct{})
 
 	go func() {
-		process.Process.Signal(sig) // pretty sure this doesn't do anything. It seems like the signal is automatically sent to the command?
-		process.Wait()
+		cmd.Process.Signal(sig) // pretty sure this doesn't do anything. It seems like the signal is automatically sent to the command?
+		cmd.Wait()
 		close(done)
 	}()
 	select {
@@ -73,6 +83,6 @@ func signalProcessWithTimeout(process *exec.Cmd, sig os.Signal) {
 		return
 	case <-time.After(10 * time.Second):
 		log.Println("Killing command due to timeout.")
-		process.Process.Kill()
+		cmd.Process.Kill()
 	}
 }

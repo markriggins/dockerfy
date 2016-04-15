@@ -1,3 +1,5 @@
 *.gz
 dist/*
+build/*
 .DS_Store
+.dockerfy*
