@@ -1,0 +1,13 @@
+FROM nginx:1.9
+
+COPY .dockerfy-linux-amd64 /usr/local/bin/dockerfy
+
+# Clients use us like this
+
+# ADD https://github.com/markriggins/dockerfy/files/224085/dockerfy-linux-amd64-0.0.12.tar.gz /tmp/dockerfy.tar.gz
+# RUN tar -C /usr/local/bin -xvzf /tmp/dockerfy.tar.gz; \
+#     ls -l /usr/local/bin/docker*
+
+ENTRYPOINT [ 'dockerfy' ]
+
+CMD [ "--", "bash", "-c", "echo 'Please configure your docker CMD to run your application'"]

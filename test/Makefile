@@ -10,8 +10,8 @@ push: .mk.nginx-with-dockerfy
 	docker push markriggins/nginx-with-dockerfy
 
 .mk.nginx-with-dockerfy: Dockerfile.nginx-with-dockerfy
-	cd ../..; make dist
-	cp -f ../../dist/linux/amd64/dockerfy .dockerfy-linux-amd64
+	cd ..; make dist
+	cp -f ../dist/linux/amd64/dockerfy .dockerfy-linux-amd64
 	docker build --file Dockerfile.nginx-with-dockerfy -t markriggins/nginx-with-dockerfy .
 	docker tag markriggins/nginx-with-dockerfy markriggins/nginx-with-dockerfy:$(TAG)
 

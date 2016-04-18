@@ -1,8 +1,0 @@
-FROM nginx:1.9
-
-COPY .dockerfy-linux-amd64 /usr/local/bin/dockerfy
-
-
-ENTRYPOINT [ 'dockerfy' ]
-
-CMD [ "--", "bash", "-c", "echo 'Please configure your docker CMD to run your application'"]

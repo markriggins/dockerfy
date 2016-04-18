@@ -1,0 +1,48 @@
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server ipv6only=on;
+
+    root /usr/share/nginx/html;
+    index index.html index.htm;
+
+    # Make site accessible from http://localhost/
+    server_name localhost;
+
+    {{/*
+          An example of how to use environment variables and golang templates to 
+          customize a configuration file.  
+
+          In this case, if the environment variable $PROXY_PASS_URL is set, then configure
+          nginx to proxy all requests to the $PROXY_PASS_URL
+
+    */}}
+    {{ if .Env.PROXY_PASS_URL }}
+      location / {
+        proxy_pass {{ .Env.PROXY_PASS_URL }};
+
+        {{/*  
+            An Example of how secrets can be injected into files.  The secrets.env file
+            contains a line: PROXY_PASSWORD="a2luZzppc25ha2Vk".   
+
+            If the container was started, mounting the the secrets file to 
+            /secrets/secrets.env and the dockerfy command command was run with 
+            the option -secrets /secrets/secrets.env, then the section below will
+            expand to:
+
+              proxy_set_header Authorization "Basic a2luZzppc25ha2Vk";
+
+            otherwise, it will be empty
+
+        */}}
+        {{ if .Secret.PROXY_PASSWORD }}
+        proxy_set_header Authorization "Basic {{ .Secret.PROXY_PASSWORD }}";
+        {{ end }}
+
+
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_redirect {{ .Env.PROXY_PASS_URL }} $host;
+      }
+    {{ end }}
+}

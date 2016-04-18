@@ -1,3 +1,9 @@
+#
+#   Build an nginx image with dockerfy and zombie-maker strictly for test purposes
+#   
+#   NOTE:  this is NOT an example of how YOU should use dockerfy in a Dockerfile
+#
+
 FROM nginx:1.9
 MAINTAINER Mark Riggins mark.riggins@gmail.com
 
@@ -15,11 +21,6 @@ COPY zombie-maker-debian-binary /usr/local/bin/zombie-maker
 EXPOSE 80
 
 ENV DEPLOYMENT_ENV=staging
-
-#  NOTE: These options do not work well on virtualbox osx -- it pegs one CPU
-#     "--log-poll", \
-#     "--stdout", "/var/log/nginx/access.log", \
-#     "--stderr", "/var/log/nginx/error.log", \
 
 ENTRYPOINT [ "dockerfy", \
      "--template", "/etc/nginx/conf.d/default.conf.tmpl:/etc/nginx/conf.d/default.conf", \
