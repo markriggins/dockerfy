@@ -1,27 +1,16 @@
+# proxy_pass {{ .Env.ROOT_SCHEME }}://{{ .Env.HOSTNAME }}:{{ .Env.ROOT_PORT }}{{ .Env.ROOT_PATH }}/;
+#proxy_redirect {{ .Env.APP_1_SCHEME }}://{{ .Env.HOSTNAME }}:{{ .Env.APP_1_PORT }}{{ .Env.APP_1_PATH }} $host;}
 
 DOCKER_IP := $(shell docker-machine ip $(shell docker-machine active))
-nginx-proxy-image:
-	docker build --tag nginx-proxy .
+performance-proxy-image:
+	docker build --tag performance-proxy .
 
 
 stop: 
-	@docker rm -f nginx-proxy 2>/dev/null || true
+	@docker rm -f performance-proxy 2>/dev/null || true
 	@docker rm -f todowranger 2>/dev/null || true
 
-
-#
-#  This example shows how to pass an environment variable $PROXY_PASS_URL into the nginx.conf file by 
-#  using a template.   It can proxy amazon.com or any other website that works with nginx reverse proxy
-#
-proxy-amazon: nginx-proxy-image stop
-	docker run -d -p 80:80 -e PROXY_PASS_URL="https://www.amazon.com/" --name nginx-proxy nginx-proxy
+proxy-performance: performance-proxy-image stop
+	docker run -d -p 8080:80 -e ROOT_SCHEME="http" -e ROOT_PORT="8000" -e ROOT_PATH="" -e APP_1_SCHEME="http" -e APP_1_PORT="4200" -e APP_1_PATH="/performance/app-1" -e APP_1_RULE="/performance/app-1"  --name performance-proxy performance-proxy
 	open http://$(shell docker-machine ip $(shell docker-machine active))
 
-
-#
-#  This example show how to proxy back to another container running on the same host
-#
-proxy-todowranger: nginx-proxy-image stop
-	docker run -d -p 8001:80 --name todowrangler markriggins/todowrangler
-	docker run -d -p 80:80 -e PROXY_PASS_URL="http://$(DOCKER_IP):8001" --name nginx-proxy nginx-proxy
-	open http://$(DOCKER_IP)

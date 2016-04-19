@@ -8,25 +8,21 @@ server {
     # Make site accessible from http://localhost/
     server_name localhost;
 
-    {{/*
-          An example of how to use environment variables and golang templates to 
-          customize a configuration file.  
-
-          In this case, if the environment variable $PROXY_PASS_URL is used to
-          configure proxy_pass
-
-    */}}
     location / {
-      proxy_pass {{ .Env.PROXY_PASS_URL }};
-
-      {{ if .Secret.PROXY_PASSWORD }}
-      proxy_set_header Authorization "Basic {{ .Secret.PROXY_PASSWORD }}";
-      {{ end }}
-
+      proxy_pass {{ .Env.ROOT_SCHEME }}://{{ .Env.HOSTNAME }}:{{ .Env.ROOT_PORT }}{{ .Env.ROOT_PATH }}/;
 
       proxy_set_header X-Real-IP $remote_addr;
       proxy_set_header Host $host;
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_redirect {{ .Env.PROXY_PASS_URL }} $host;
+      proxy_redirect {{ .Env.ROOT_SCHEME }}://{{ .Env.HOSTNAME }}:{{ .Env.ROOT_PORT }}{{ .Env.ROOT_PATH }} $host;
+    }
+
+    location {{ .Env.APP_1_RULE  }} {
+      proxy_pass {{ .Env.APP_1_SCHEME }}://{{ .Env.HOSTNAME }}:{{ .Env.APP_1_PORT }}{{ .Env.APP_1_PATH }}/;
+
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_redirect {{ .Env.APP_1_SCHEME }}://{{ .Env.HOSTNAME }}:{{ .Env.APP_1_PORT }}{{ .Env.APP_1_PATH }} $host;
     }
 }
