@@ -57,12 +57,13 @@ func removeCommandsFromOsArgs() Commands {
 		default:
 			if cmd_user != nil {
 				// Expect a username or uid
-				cmd_user, _ = user.LookupId(os.Args[i])
+				var err1 error
+				cmd_user, err1 = user.LookupId(os.Args[i])
 				if cmd_user == nil {
 					// Not a userid, try as a username
-					cmd_user, _ = user.Lookup(os.Args[i])
+					cmd_user, err1 = user.Lookup(os.Args[i])
 					if cmd_user == nil {
-						log.Fatalf("unknown user: '%s'", os.Args[i])
+						log.Fatalf("unknown user: '%s': %s", os.Args[i], err1)
 					}
 				}
 				uid, _ := strconv.Atoi(cmd_user.Uid)

@@ -8,25 +8,43 @@ DOLLAR='$'
 
 all: dockerfy nginx-with-dockerfy
 	
-dockerfy:
+dockerfy: deps
 	echo "Building dockerfy"
 	go install -ldflags "$(LDFLAGS)"
+
+deps:
+	go get github.com/hpcloud/tail
+	go get golang.org/x/net/context
+	go get golang.org/x/sys/unix
 
 
 dist-clean:
 	rm -rf dist
 	rm -f dockerfy-linux-*.tar.gz
 
-dist: dist-clean
-	mkdir -p dist/linux/amd64 && GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o dist/linux/amd64/dockerfy
-	mkdir -p dist/linux/armel && GOOS=linux GOARCH=arm GOARM=5 go build -ldflags "$(LDFLAGS)" -o dist/linux/armel/dockerfy
-	mkdir -p dist/linux/armhf && GOOS=linux GOARCH=arm GOARM=6 go build -ldflags "$(LDFLAGS)" -o dist/linux/armhf/dockerfy
+
+dist: dist-clean deps
+	mkdir -p dist/linux/amd64 
+	@# a native build allows user.Lookup to work.  Not sure why it doesn't if we cross-compile
+	@# from OSX
+	docker run --rm -it -e GOPATH=/tmp/go \
+	  --volume $$PWD:/src/dockerfy  \
+	  --workdir /src/dockerfy \
+	  golang:1.6 make dist/linux/amd64/dockerfy
+
+	@#&& GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o dist/linux/amd64/dockerfy
+	@#mkdir -p dist/linux/armel && GOOS=linux GOARCH=arm GOARM=5 go build -ldflags "$(LDFLAGS)" -o dist/linux/armel/dockerfy
+	@#mkdir -p dist/linux/armhf && GOOS=linux GOARCH=arm GOARM=6 go build -ldflags "$(LDFLAGS)" -o dist/linux/armhf/dockerfy
+
+dist/linux/amd64/dockerfy: deps
+	go build -ldflags "$(LDFLAGS)" -o dist/linux/amd64/dockerfy
+
 
 release: dist
 	mkdir -p dist/release
 	tar -czf dist/release/dockerfy-linux-amd64-$(TAG).tar.gz -C dist/linux/amd64 dockerfy 
-	tar -czf dist/release/dockerfy-linux-armel-$(TAG).tar.gz -C dist/linux/armel dockerfy 
-	tar -czf dist/release/dockerfy-linux-armhf-$(TAG).tar.gz -C dist/linux/armhf dockerfy 
+	@#tar -czf dist/release/dockerfy-linux-armel-$(TAG).tar.gz -C dist/linux/armel dockerfy 
+	@#tar -czf dist/release/dockerfy-linux-armhf-$(TAG).tar.gz -C dist/linux/armhf dockerfy 
 
 nginx-with-dockerfy: dist
 	docker build -t markriggins/nginx-with-dockerfy:$(TAG) --file Dockerfile.nginx-with-dockerfy .
