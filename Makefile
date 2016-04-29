@@ -1,8 +1,8 @@
 .PHONY : dockerfy dist-clean dist release zombie-maker
 
-TAG:=`git describe --abbrev=0 --tags`
-YTAG:=`git describe --abbrev=0 --tags | cut -d. -f1,2`
-XTAG:=`git describe --abbrev=0 --tags | cut -d. -f1`
+TAG:=`git describe --tags`
+YTAG:=`git describe --tags | cut -d. -f1,2`
+XTAG:=`git describe --tags | cut -d. -f1`
 LDFLAGS:=-X main.buildVersion=$(TAG)
 DOLLAR='$'
 
@@ -48,6 +48,7 @@ release: dist
 
 nginx-with-dockerfy: dist
 	docker build -t markriggins/nginx-with-dockerfy:$(TAG) --file Dockerfile.nginx-with-dockerfy .
+	docker tag markriggins/nginx-with-dockerfy:$(TAG) nginx-with-dockerfy
 
 
 float-tags: nginx-with-dockerfy

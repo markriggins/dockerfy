@@ -4,19 +4,18 @@
 #   NOTE:  this is NOT an example of how YOU should use dockerfy in a Dockerfile
 #
 
-FROM nginx:1.9
+# Start with a locally built nginx-with-dockerfy
+
+FROM nginx-with-dockerfy
 MAINTAINER Mark Riggins mark.riggins@gmail.com
 
-RUN apt-get update -qq && apt-get install -y vim
-
-# Clients would install the latest from https://github.com/markriggins/dockerfy/releases,
-# but we want to test what we just built locally
-COPY .dockerfy-linux-amd64 /usr/local/bin/dockerfy
+# RUN apt-get update -qq && apt-get install -y vim
 
 COPY default.conf.tmpl /etc/nginx/conf.d/default.conf.tmpl
 
 COPY overlays /tmp/overlays
-COPY zombie-maker-debian-binary /usr/local/bin/zombie-maker
+COPY .zombie-maker-debian-binary /usr/local/bin/zombie-maker
+COPY secrets.json /secrets/secrets.json
  
 EXPOSE 80
 

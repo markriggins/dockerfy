@@ -3,4 +3,4 @@
 *.a
 *.mk.*
 zombie-maker
-zombie-maker-debian-binary
+.zombie-maker-debian-binary

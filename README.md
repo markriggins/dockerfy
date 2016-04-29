@@ -15,7 +15,7 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
 8. Starting Services -- and shutting down the container if they fail
 9. Propagating signals to child processes
 10. Reaping Zombie (defunct) processes
-11. Running services and commands and various user accounts
+11. Running services and commands under various user accounts
 
 
 ## Dockerfile Example
