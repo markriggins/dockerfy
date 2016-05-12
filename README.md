@@ -22,8 +22,8 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
 
     FROM markriggins/nginx-with-dockerfy
     
-    ENTRYPOINT [ "dockerfy",                                                                           \
-                    "--secrets", "/secrets/secrets.env",                                                \
+    ENTRYPOINT [ "dockerfy",                                                                            \
+                    "--secrets-files", "/secrets/secrets.env",                                          \
                     "--overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",         \
                     "--template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         \
                     "--wait", "tcp://${MYSQLSERVER}:${MYSQLPORT", "--timeout", "60s",                   \
@@ -42,7 +42,7 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
         - /secrets:/secrets
 
       environment:
-        - SECRETS_FILE=/secrets/secrets.env
+        - SECRETS_FILES=/secrets/secrets.env
 
       entrypoint: 
         - dockerfy
@@ -74,7 +74,7 @@ The above example will run the nginx program inside a docker container, but **be
 
 
 This all assumes that the /secrets volume was mounted and the environment variables $MYSQLSERVER, $MYSQLPORT
-and $DEPLOYMENT_ENV were set when the container started.  Note that **dockerfy** expands the environment variables in its arguments, since the ENTRYPOINT [] form in Dockerfiles does not, replacing all $VARNAME, {{ .Env.VARNAME }} and {{ .Secret.VARNAME }} occurances with their values from the environment or secrets file.
+and $DEPLOYMENT_ENV were set when the container started.  Note that **dockerfy** expands the environment variables in its arguments, since the ENTRYPOINT [] form in Dockerfiles does not, replacing all $VARNAME, {{ .Env.VARNAME }} and {{ .Secret.VARNAME }} occurances with their values from the environment or secrets files.
 
 Note that the `ps -ef` command would list the unexpanded argument '{{ .Secret.DB_PASSWORD }}', not the actual password
 
@@ -130,7 +130,7 @@ Overlay sources that do not exist are simply skipped.  The allows you to specify
 
 
 #### Loading Secret Settings
-Secrets can loaded from a file by using the `--secrets` option or the $SECRETS_FILE environment variable.   The secrets file must contain simple NAME=VALUE lines, following bash shell conventions for definitions and comments. Leading and trailing quotes will be trimmed from the value.
+Secrets can loaded from a file by using the `--secrets-files` option or the $SECRETS_FILES environment variable.   The secrets files ending with `.env` must contain simple NAME=VALUE lines, following bash shell conventions for definitions and comments. Leading and trailing quotes will be trimmed from the value.  Secrets files ending with `.json` will be loaded as JSON, and must be a simple single-level dictionary of strings
 
 	#
 	# These are our secrets
@@ -139,6 +139,10 @@ Secrets can loaded from a file by using the `--secrets` option or the $SECRETS_F
 	
 	
 Secrets can be injected into configuration files by using [Secrets in Templates](https://github.com/markriggins/dockerfy#secrets-in-templates). 
+
+For convenience, all secrets files are combined into ~/.secrets/combined_secrets.json inside the ephemeral running
+container.  So JavaScript, Python and Go programs can load the secrets programatically, if desired.  The combined secrets
+file location is exported as $SECRETS_FILE into the running --start, --run and primary command's environments
 
 ##### Security Concerns
 1. **Reading secrets from files** -- Dockerfy only passes secrets to programs via configuration files to prevent leakage. Secrets could be passed to programs via the environment, but programs use the environment in unpredictable ways, such as logging, or perhaps even dumping their state back to the browser.
@@ -223,7 +227,7 @@ If you're running in development mode and mounting -v $PWD:/app in your docker c
 	~/.secrets/my-application--production.env
 	~/.secrets/my-application--staging.env
 	
-3. Export SECRETS_FILE=/secrets/my-application--$DEPLOYMENT_ENV.env
+3. Export SECRETS_FILES=/secrets/my-application--$DEPLOYMENT_ENV.env
 4. Avoid writing templates to your mounted worktree.  **The expanded results might contain secrets!!** and even worse, if you forget to add them to your .gitignore file, then **your secrets could wind up on github.com!!**  Instead, write them to /etc/ or some other place inside the running container that will be forgotten when the container exits.
 
 

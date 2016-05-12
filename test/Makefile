@@ -18,7 +18,8 @@ build: .zombie-maker-debian-binary .mk.nginx-with-dockerfy-and-zombie-maker
 
 
 stop:
-	@docker rm -f test-nginx 2>/dev/null || true
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
 
 run-staging: stop
 	docker run -d -p 80:80 -e DEPLOYMENT_ENV=staging --name test-nginx test-nginx \
@@ -43,13 +44,13 @@ run-proxy-amazon: stop
 run-prod-secrets: stop
 	docker run -d -p 80:80 -e DEPLOYMENT_ENV=prod --name test-nginx \
 				-v $(PWD):/secrets \
-				-e SECRETS_FILE=/secrets/secrets.env \
+				-e SECRETS_FILES=/secrets/secrets.env \
 				nginx-with-dockerfy-and-zombie-maker \
 					--verbose \
 					--overlay /tmp/overlays/_common/:/usr/share/nginx/ \
 					--overlay '/tmp/overlays/{{ .Env.DEPLOYMENT_ENV }}/html:/usr/share/nginx/' \
 					--template '/secrets/secrets.html.tmpl:/usr/share/nginx/html/secrets.html' \
-					--secrets "/secrets/secrets.json" \
+					--secrets-files "/secrets/secrets.json" \
  			        -- nginx 
 	open http://$(shell docker-machine ip $(shell docker-machine active))/secrets.html
 
@@ -65,7 +66,8 @@ start-tests:
 run-zombie-test: 
 	@echo "\n\nRunning Zombie Test -- expect 10 zombies to get reaped"
 	@echo "################################################################################"
-	@docker rm -f test-nginx 2>/dev/null || true
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
 	@echo "\nRun zombie-maker inside test-nginx"
 	@echo "--------------------------------------------------------------------------"
 	docker run -d --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose --reap --reap-poll-interval 2s \
@@ -91,21 +93,24 @@ run-zombie-test:
 	@docker logs test-nginx 2>&1| egrep -q 'Reaped 10 zombies' || (echo FAILED TO REAP; exit 1)
 
 	@echo "run-zombie-test PASSED"
-	@docker rm -f test-nginx 2>/dev/null || true
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
 
 
 run-service-stops-too-soon-test: 
 	@echo "\n\nRunning 'run-service-stops-too-soon-test'"
 	@echo "\tWhen the service exits, the primary command should also stop"
 	@echo "################################################################################"
-	@docker rm -f test-nginx 2>/dev/null || true
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
 	docker run -d -it --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose \
 		--start bash -c 'sleep 5 && echo "service exiting"' -- \
 		sleep 10 >/dev/null
 	@sleep 7
 	docker logs test-nginx 2>&1 | egrep -q 'Service.*stopped' 
 	@echo "\t Service Stopped"
-	@docker rm -f test-nginx 2>/dev/null || true
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
 	@echo "run-service-stops-too-soon-test PASSED"
 
 
@@ -113,7 +118,8 @@ run-primary-stops-while-service-is-running-test:
 	@echo "\n\nRunning 'run-primary-stops-while-service-is-running-test'"
 	@echo "\tThis should kill the services before they have a chance to finish"
 	@echo "################################################################################"
-	@docker rm -f test-nginx 2>/dev/null || true
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
 	docker run -d -it --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose \
 		--start bash -c 'sleep 10 && echo "ERROR: service-1 STILL RUNNING"' -- \
 		--start bash -c 'sleep 10 && echo "ERROR: service-2 STILL RUNNING"' -- \
@@ -122,7 +128,8 @@ run-primary-stops-while-service-is-running-test:
 	@sleep 7
 	@docker logs test-nginx 2>&1  | egrep -q 'Primary Command.*stopped'
 	@docker logs test-nginx 2>&1  | egrep -q '^ERROR:.*STILLRUNNING' && exit 1 || true
-	@docker rm -f test-nginx 2>/dev/null || true
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
 	@echo "run-primary-stops-while-service-is-running-test PASSED"
 	
 
@@ -130,7 +137,8 @@ run-before-primary-test:
 	@echo "\n\nrun-before-primary-test:"
 	@echo "\tBefore the service starts, the -run commands should finish in order"
 	@echo "################################################################################"
-	@docker rm -f test-nginx 2>/dev/null || true
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
 	docker run -d -it --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose \
 		--run bash -c 'sleep 3; echo "1 DONE"' -- \
 		--run bash -c 'sleep 2; echo "2 DONE"' -- \
@@ -141,22 +149,26 @@ run-before-primary-test:
 	docker logs test-nginx 2>&1 | egrep -q '^2 DONE' 
 	docker logs test-nginx 2>&1 | egrep -q '^3 DONE' 
 	docker logs test-nginx 2>&1 | egrep -q '^4 PRIMARY COMMAND DONE' 
-	@docker rm -f test-nginx 2>/dev/null || true
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
 	@echo "run-before-primary-test PASSED"
 
 run-primary-service-exits:
-	@docker rm -f test-nginx 2>/dev/null || true
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
 	@echo "\n\nrun-primary-service-exits:"
 	@echo "\tVerify that when the primary service finishes, the container exits"
 	@echo "################################################################################"
 	docker run -it --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose echo DONE 
 	docker inspect --format '{{ .State.Status }}' test-nginx | egrep -q exited
-	@docker rm -f test-nginx 2>/dev/null || true
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
 	@echo "run-primary-service-exits PASSED"
 
 
 run-wait-test:
-	@docker rm -f test-nginx 2>/dev/null || true
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
 	@echo "\n\nrun-wait-test:"
 	@echo "\tVerify that when the primary command runs after we wait for something"
 	@echo "################################################################################"
@@ -167,13 +179,17 @@ run-wait-test:
 	@echo "run-wait-test PASSED"
 
 run-user-option-test:
-	@docker rm -f test-nginx 2>/dev/null || true
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
 	@echo "\n\nrun-user-option-test:"
 	@echo "\tVerify that the --user option affects the user account of subsequent commands"
 	@echo "################################################################################"
-	docker run -d -it -e SECRETS_FILE=/secrets/secrets.json --name test-nginx nginx-with-dockerfy-and-zombie-maker \
+	docker run -d -it -e SECRETS_FILES=/secrets/secrets.json:/secrets/secrets.2.json \
+	    --name test-nginx nginx-with-dockerfy-and-zombie-maker \
 		--run echo -n "MAIL:" -- --user mail  --run id -a -- \
 		--run ls -l '/var/spool/mail/.secrets' -- \
+		--run cat '/var/spool/mail/.secrets/combined_secrets.json' -- \
+		--run cat '/var/spool/mail/.secrets/secrets.json' -- \
 		--run /usr/bin/env -- \
 		--run echo -n "ROOT:" -- --user root  --run id -a -- \
 		--run /usr/bin/env -- \
@@ -181,12 +197,15 @@ run-user-option-test:
 		id -a
 	@sleep 5
 	docker logs test-nginx 2>/dev/null| egrep -q -- '\-r\-* .*secrets.json'
-	docker logs test-nginx 2>/dev/null| egrep -q -- 'SECRETS_FILE=/var/mail/.secrets/secrets.json'
-	docker logs test-nginx 2>/dev/null| egrep -q -- 'SECRETS_FILE=/secrets/secrets.json'
-	docker logs test-nginx 2>/dev/null| fgrep -q -- 'ROOT:uid=0(root) gid=0(root) groups=0(root)'
-	docker logs test-nginx 2>/dev/null| fgrep -q -- 'MAIL:uid=8(mail) gid=8(mail) groups=8(mail)'
 
-	@docker rm -f test-nginx 2>/dev/null || true
+	docker logs test-nginx 2>/dev/null| fgrep -q -- 'SECRETS_FILE=/var/mail/.secrets/combined_secrets.json'
+	docker logs test-nginx 2>/dev/null| fgrep -q -- 'SECRETS_FILES=/var/mail/.secrets/secrets.json:/var/mail/.secrets/secrets.2.json'
+	docker logs test-nginx 2>/dev/null| fgrep -q -- 'uid=0(root) gid=0(root) groups=0(root)'
+	docker logs test-nginx 2>/dev/null| fgrep -q -- 'uid=8(mail) gid=8(mail) groups=8(mail)'
+	docker logs test-nginx 2>/dev/null| fgrep -q -- '"JSON_SECRET": "Jason Voorhees did it"'
+	[ $$(docker logs test-nginx 2>/dev/null| fgrep -- 'uid=0(root) gid=0(root) groups=0(root)' | wc -l) == 2 ]
+
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
 	@echo "run-user-option-test PASSED"
 
 

@@ -5,7 +5,7 @@
 //     "-template", "/etc/nginx/conf.d/default.conf.tmpl:/etc/nginx/conf.d/default.conf", \
 //     "-stdout", "/var/log/nginx/access.log", \
 //     "-stderr", "/var/log/nginx/error.log", \
-//     "-secrets", "/secrets/secrets.env", \
+//     "-secrets-files", "/secrets/secrets.env", \
 //     "--" ],
 package main
 
@@ -43,7 +43,7 @@ var (
 	reapPollIntervalFlag time.Duration
 	reapFlag             bool
 	runsFlag             sliceVar
-	secretsFlag          sliceVar
+	secretsFilesFlag     sliceVar
 	startsFlag           sliceVar
 	stderrTailFlag       sliceVar
 	stdoutTailFlag       sliceVar
@@ -106,7 +106,7 @@ Arguments:
 	println(`   	     --stdout /var/log/nginx/access.log \
              --stderr /var/log/nginx/error.log \
              --wait tcp://web:8000 nginx \
-             --secrets /secrets/secrets.env
+             --secrets-files /secrets/secrets.env
 	`)
 	println(`   Run a command and reap any zombie children that the command forgets to reap
 
@@ -138,7 +138,7 @@ func main() {
 	flag.BoolVar(&logPollFlag, "log-poll", false, "use polling to tail log files")
 	flag.Var(&templatesFlag, "template", "Template (/template:/dest). Can be passed multiple times")
 	flag.Var(&overlaysFlag, "overlay", "overlay (/src:/dest). Can be passed multiple times")
-	flag.Var(&secretsFlag, "secrets", "secrets (path to secrets.env file). Can be passed multiple times")
+	flag.Var(&secretsFilesFlag, "secrets-files", "secrets files (path to secrets.env files). Colon-separated list")
 	flag.Var(&runsFlag, "run", "run (cmd [opts] [args] --) Can be passed multiple times")
 	flag.Var(&startsFlag, "start", "start (cmd [opts] [args] --) Can be passed multiple times")
 	flag.BoolVar(&reapFlag, "reap", false, "reap all child processes")
