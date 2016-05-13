@@ -61,7 +61,10 @@ func getSecretsFileNames() []string {
 	if os.Getenv("SECRETS_FILES") != "" {
 		secretsFileNames = append(secretsFileNames, strings.Split(os.Getenv("SECRETS_FILES"), ":")...)
 	}
-	secretsFileNames = append(secretsFileNames, secretsFilesFlag...) // last file wins on dupliate keys
+	// Command line options override the environment, so we process those LAST
+	for _, secretsFileName := range secretsFilesFlag {
+		secretsFileNames = append(secretsFileNames, strings.Split(secretsFileName, ":")...)
+	}
 	return secretsFileNames
 }
 

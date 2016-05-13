@@ -58,12 +58,13 @@ func removeCommandsFromOsArgs() Commands {
 			if cmd_user != nil {
 				// Expect a username or uid
 				var err1 error
-				cmd_user, err1 = user.LookupId(os.Args[i])
+				user_name_or_id := os.ExpandEnv(string_template_eval(os.Args[i]))
+				cmd_user, err1 = user.LookupId(user_name_or_id)
 				if cmd_user == nil {
 					// Not a userid, try as a username
-					cmd_user, err1 = user.Lookup(os.Args[i])
+					cmd_user, err1 = user.Lookup(user_name_or_id)
 					if cmd_user == nil {
-						log.Fatalf("unknown user: '%s': %s", os.Args[i], err1)
+						log.Fatalf("unknown user: '%s': %s", user_name_or_id, err1)
 					}
 				}
 				uid, _ := strconv.Atoi(cmd_user.Uid)
@@ -83,9 +84,9 @@ func removeCommandsFromOsArgs() Commands {
 						cmd.Path, _ = exec.LookPath(cmd.Path)
 					}
 				}
-				cmd.Args = append(cmd.Args, os.Args[i])
+				cmd.Args = append(cmd.Args, os.ExpandEnv(string_template_eval(os.Args[i])))
 			} else {
-				newOsArgs = append(newOsArgs, os.Args[i])
+				newOsArgs = append(newOsArgs, os.ExpandEnv(string_template_eval(os.Args[i])))
 			}
 		}
 	}

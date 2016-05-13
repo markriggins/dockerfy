@@ -26,7 +26,8 @@ run-staging: stop
 		     --overlay /tmp/overlays/_common/html:/usr/share/nginx/ \
 		     --overlay /tmp/overlays/MISSING/html:/usr/share/nginx/ \
 	         --overlay '/tmp/overlays/$$DEPLOYMENT_ENV/html:/usr/share/nginx/' \
-	         -- nginx
+	         -- nginx -g "daemon off;"
+
 	open http://$(shell docker-machine ip $(shell docker-machine active))/robots.txt
 	open http://$(shell docker-machine ip $(shell docker-machine active))
 
@@ -34,7 +35,7 @@ run-prod: stop
 	docker run -d -p 80:80 -e DEPLOYMENT_ENV=prod --name test-nginx nginx-with-dockerfy-and-zombie-maker \
 		     --overlay /tmp/overlays/_common/html:/usr/share/nginx/ \
 	         --overlay '/tmp/overlays/$$DEPLOYMENT_ENV/html:/usr/share/nginx/' \
-	         -- nginx
+	         -- nginx -g "daemon off;"
 	open http://$(shell docker-machine ip $(shell docker-machine active))/robots.txt
 
 run-proxy-amazon: stop
@@ -50,13 +51,13 @@ run-prod-secrets: stop
 					--overlay /tmp/overlays/_common/:/usr/share/nginx/ \
 					--overlay '/tmp/overlays/{{ .Env.DEPLOYMENT_ENV }}/html:/usr/share/nginx/' \
 					--template '/secrets/secrets.html.tmpl:/usr/share/nginx/html/secrets.html' \
-					--secrets-files "/secrets/secrets.json" \
- 			        -- nginx 
+					--secrets-files "/secrets/secrets.json:/secrets/secrets.2.json" \
+ 			        -- nginx -g "daemon off;"
 	open http://$(shell docker-machine ip $(shell docker-machine active))/secrets.html
 
 
 test: start-tests run-zombie-test run-service-stops-too-soon-test run-primary-stops-while-service-is-running-test \
-		run-before-primary-test run-primary-service-exits run-wait-test run-user-option-test
+		run-before-primary-test run-primary-service-exits run-wait-test run-user-option-test run-option-expansion-test
 	@echo "\n\nALL TESTS PASSED"
 
 start-tests:
@@ -204,9 +205,35 @@ run-user-option-test:
 	docker logs test-nginx 2>/dev/null| fgrep -q -- 'uid=8(mail) gid=8(mail) groups=8(mail)'
 	docker logs test-nginx 2>/dev/null| fgrep -q -- '"JSON_SECRET": "Jason Voorhees did it"'
 	[ $$(docker logs test-nginx 2>/dev/null| fgrep -- 'uid=0(root) gid=0(root) groups=0(root)' | wc -l) == 2 ]
-
+	# '
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 	@echo "run-user-option-test PASSED"
+
+run-option-expansion-test:
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
+	@echo "\n\nrun-option-expansion-test:"
+	@echo "\tVerify that the $VARS and {{ .Env.VARS }} are expanded before use by dockerfy"
+	@echo "################################################################################"
+	docker run -d -it -e SECRETS_FILES=/secrets/secrets.json:/secrets/secrets.2.json \
+		-e DB_NAME="My-Db" -e DB_HOST=localhost \
+	    --name test-nginx nginx-with-dockerfy-and-zombie-maker \
+	    --run echo 'DB_HOST={{ .Env.DB_HOST }}' -- \
+		--run echo 'DB_NAME_XP_1=$$DB_NAME' -- \
+		--run echo 'DB_NAME_XP_2={{ .Env.DB_NAME }}' --  \
+		echo 'JSON_SECRET={{ .Secret.JSON_SECRET }}'
+
+
+	@sleep 5
+	docker logs test-nginx 2>/dev/null 
+	docker logs test-nginx 2>/dev/null | fgrep -q -- 'DB_HOST=localhost'
+	docker logs test-nginx 2>/dev/null | fgrep -q -- 'JSON_SECRET=Jason Voorhees did it'
+	docker logs test-nginx 2>/dev/null | fgrep -q -- 'DB_NAME_XP_1=My-Db'
+	docker logs test-nginx 2>/dev/null | fgrep -q -- 'DB_NAME_XP_2=My-Db'
+
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+	@echo "run-option-expansion-test PASSED"
+		
 
 
 
