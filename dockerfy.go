@@ -185,7 +185,7 @@ func main() {
 			if len(parts) != 2 {
 				log.Fatalf("bad overlay argument: '%s'. expected \"/src:/dest\"", o)
 			}
-			src, dest := os.ExpandEnv(string_template_eval(parts[0])), os.ExpandEnv(string_template_eval(parts[1]))
+			src, dest := string_template_eval(parts[0]), string_template_eval(parts[1])
 			if _, err := os.Stat(src); os.IsNotExist(err) {
 				log.Printf("overlay source: %s does not exist.  Skipping", src)
 				continue
@@ -225,7 +225,7 @@ func main() {
 			if len(parts) != 2 {
 				log.Fatalf("bad template argument: %s. expected \"/template:/dest\"", t)
 			}
-			template, dest = os.ExpandEnv(string_template_eval(parts[0])), os.ExpandEnv(string_template_eval(parts[1]))
+			template, dest = string_template_eval(parts[0]), string_template_eval(parts[1])
 		}
 		generateFile(template, dest)
 	}
@@ -237,12 +237,12 @@ func main() {
 
 	for _, logFile := range stdoutTailFlag {
 		wg.Add(1)
-		go tailFile(ctx, cancel, os.ExpandEnv(string_template_eval(logFile)), logPollFlag, os.Stdout)
+		go tailFile(ctx, cancel, string_template_eval(logFile), logPollFlag, os.Stdout)
 	}
 
 	for _, logFile := range stderrTailFlag {
 		wg.Add(1)
-		go tailFile(ctx, cancel, os.ExpandEnv(string_template_eval(logFile)), logPollFlag, os.Stderr)
+		go tailFile(ctx, cancel, string_template_eval(logFile), logPollFlag, os.Stderr)
 	}
 
 	// Process -start and -run flags

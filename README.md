@@ -24,7 +24,7 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
     
     ENTRYPOINT [ "dockerfy",                                                                            \
                     "--secrets-files", "/secrets/secrets.env",                                          \
-                    "--overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",         \
+                    "--overlay", "/app/overlays/{{ .Env.DEPLOYMENT_ENV }}/html/:/usr/share/nginx/html",         \
                     "--template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         \
                     "--wait", 'tcp://{{ .Env.MYSQLSERVER }}:{{ .Env.MYSQLPORT }}', "--timeout", "60s",  \
                     "--run", '/app/bin/migrate_lock', "--server='{{ .Env.MYSQLSERVER }}:{{ .Env.MYSQLPORT }}'",  "--", \
@@ -48,9 +48,9 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
         - dockerfy
 
       command: [ 
-        "--overlay", "/app/overlays/${DEPLOYMENT_ENV}/html/:/usr/share/nginx/html",         
+        "--overlay", "/app/overlays/{{ .Env.DEPLOYMENT_ENV }}/html/:/usr/share/nginx/html",         
         "--template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         
-        "--wait", "tcp://{{ .Env.MYSQLSERVER }}:${MYSQLPORT", "--timeout", "60s",  
+        "--wait", "tcp://{{ .Env.MYSQLSERVER }}:{{ .Env.MYSQLPORT }}", "--timeout", "60s",  
         "--wait", "tcp://{{ .Env.MYSQLSERVER }}:{{ .Env.MYSQLPORT }}", "--timeout", "60s",                  
         "--run", "/app/bin/migrate_lock", "--server='{{ .Env.MYSQLSERVER }}:{{ .Env.MYSQLPORT }}'",  "--",     
         "--start", "/app/bin/cache-cleaner-daemon", "-p", '{{ .Secret.DB_PASSWORD }}', "--",
@@ -62,7 +62,7 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
 
 The above example will run the nginx program inside a docker container, but **before nginx starts**, **dockerfy** will:
 
-1. **Sparsely Overlay** files from the application's /app/overlays directory tree for the ${DEPLOYMENT_ENV} **onto** /usr/share/nginx/html.  For example, the robots.txt file might be restrictive in the "staging" deployment environment, but relaxed in "production", so the application can maintain separate copies of robots.txt for each deployment environment: /app/overlays/staging/robots.txt, and /app/overlays/production/robots.txt
+1. **Sparsely Overlay** files from the application's /app/overlays directory tree from /app/overlays/${DEPLOYMENT_ENV}/html **onto** /usr/share/nginx/html.  For example, the robots.txt file might be restrictive in the "staging" deployment environment, but relaxed in "production", so the application can maintain separate copies of robots.txt for each deployment environment: /app/overlays/staging/robots.txt, and /app/overlays/production/robots.txt.   Overlays add or replace files similar to `cp -R` withou affecting other existing files in the target directory.
 2. **Load secret settings** from a file a /secrets/secrets.env, that become available for use in templates as {{ .Secret.**VARNAME** }}
 3. **Execute the nginx.conf.tmpl template**. This template uses the powerful go language templating features to substitute environment variables and secret settings directly into the nginx.conf file. (Which is handy since nginx doesn't read the environment itself.)  Every occurance of {{ .Env.**VARNAME** }} will be replaced with the value of $VARNAME, and every {{ .Secret.**VARNAME** }} will be replaced with the secret value of VARNAME. 
 4. **Wait** for the http://{{ .Env.MYSQLSERVER }} server to start accepting requests on port {{ .Env.MYSQLPORT }} for up to 60 seconds
@@ -75,11 +75,11 @@ The above example will run the nginx program inside a docker container, but **be
 
 
 This all assumes that the /secrets volume was mounted and the environment variables $MYSQLSERVER, $MYSQLPORT
-and $DEPLOYMENT_ENV were set when the container started.  Note that **dockerfy** expands the environment variables in its arguments, since the ENTRYPOINT [] form in Dockerfiles does not, replacing all $VARNAME, {{ .Env.VARNAME }} and {{ .Secret.VARNAME }} occurances with their values from the environment or secrets files.
+and $DEPLOYMENT_ENV were set when the container started.  Note that **dockerfy** expands the environment variables in its arguments, since the ENTRYPOINT [] form in Dockerfiles does not, replacing all {{ .Env.VARNAME }} and {{ .Secret.VARNAME }} occurances with their values from the environment or secrets files.
 
 Note that the unexpanded argument '{{ .Secret.DB_PASSWORD }}', would be visible in `ps -ef` output, not the actual password
 
-Note that ${VAR_NAME}'s are also expanded by dockerfy so you can `--wait 'tcp://$DB_HOST:80'`, but docker-compose and ecs-cli also expand environment variables inside yaml files, so the {{ .Env.VAR_NAME }} is recommended.   Single quotes are recommended in either case to avoid having the shell try to interpret the {{ }} characters.
+Note that ${VAR_NAME}'s are NOT expanded by dockerfy because docker-compose and ecs-cli also expand environment variables inside yaml files.  The {{ .Env.VAR_NAME }} form passes through easily, as long as it is inside a singly-quoted string
 
 The "--" argument is used to signify the end of arguments for a --start or --run command.
 
@@ -124,22 +124,27 @@ The entire ./overlays files must be COPY'd into the Docker image (usually along 
 Then the desired alternative for the files can be chosen at runtime use the --overlay *src:dest* option
 
 	$ dockefy --overlay /app/overlays/_commmon/html:/usr/share/nginx/ \
-		      --overlay /app/overlays/$DEPLOYMENT_ENV/html:/usr/share/nginx/ \
+		      --overlay /app/overlays/{{ .Env.DEPLOYMENT_ENV }}/html:/usr/share/nginx/ \
 		    nginx
 
 If the source path ends with a /, then all subdirectories underneath it will be copied.  This allows copying onto the root file system as the destination; so you can `-overlay /app/_root/:/` to copy files such as /app/_root/etc/nginx/nginx.conf --> /etc/nginx/nginx.conf.   This is handy if you need to drop a lot of files into various exact locations
 
-Overlay sources that do not exist are simply skipped.  The allows you to specify potential sources of content that may or may not exist in the running container.  In the above example if $DEPLOYMENT_ENV is set to 'local' then the second overlaw will be skipped if there is no corresponding /app/overlays/local source directory, and the container will run with the '_common' html content.
+Overlay sources that do not exist are simply skipped.  The allows you to specify potential sources of content that may or may not exist in the running container.  In the above example if $DEPLOYMENT_ENV environment variable is set to 'local' then the second overlaw will be skipped if there is no corresponding /app/overlays/local source directory, and the container will run with the '_common' html content.
 
 
 #### Loading Secret Settings
-Secrets can loaded from a file by using the `--secrets-files` option or the $SECRETS_FILES environment variable.   The secrets files ending with `.env` must contain simple NAME=VALUE lines, following bash shell conventions for definitions and comments. Leading and trailing quotes will be trimmed from the value.  Secrets files ending with `.json` will be loaded as JSON, and must be a simple single-level dictionary of strings
+Secrets can loaded from a file by using the `--secrets-files` option or the $SECRETS_FILES environment variable.   The secrets files ending with `.env` must contain simple NAME=VALUE lines, following bash shell conventions for definitions and comments. Leading and trailing quotes will be trimmed from the value.  Secrets files ending with `.json` will be loaded as JSON, and must be `a simple single-level dictionary of strings`
 
-	#
-	# These are our secrets
-	#
-	PROXY_PASSWORD="a2luZzppc25ha2Vk"
-	
+    #
+    # These are our secrets
+    #
+    PROXY_PASSWORD="a2luZzppc25ha2Vk"
+
+or secrets.json (which must be **a simple single-level dictionary of strings**)
+
+    {
+      "PROXY_PASSWORD": "a2luZzppc25ha2Vk"
+    }	
 	
 Secrets can be injected into configuration files by using [Secrets in Templates](https://github.com/markriggins/dockerfy#secrets-in-templates). 
 
@@ -184,6 +189,8 @@ In the above example, all occurances of the string  {{ .Env.PROXY_PASS_URL }} wi
       }
     }
 
+
+Note: $host and $remote_addr are Nginx variable that are set on a per-request basis NOT from the environment.
 
 ##### Advanced Templates 
 But go's templates offer advanced features such as if-statements and comments.  
