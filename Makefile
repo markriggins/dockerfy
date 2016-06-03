@@ -12,6 +12,9 @@ dockerfy: deps
 	echo "Building dockerfy"
 	go install -ldflags "$(LDFLAGS)"
 
+debug: deps
+	godebug run  $(ls *.go | egrep -v unix) 
+
 deps:
 	go get github.com/hpcloud/tail
 	go get golang.org/x/net/context

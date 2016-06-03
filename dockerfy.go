@@ -33,6 +33,7 @@ var (
 	ctx          context.Context
 	delims       []string
 	wg           sync.WaitGroup
+	exitCode     int
 )
 
 // Flags
@@ -270,6 +271,12 @@ func main() {
 	}
 
 	if flag.NArg() > 0 {
+
+		// perform template substitution on primary cmd
+		//for i, arg := range flag.Args() {
+		//	flag.Args()[i] = string_template_eval(arg)
+		//}
+
 		var cmdString = strings.Join(flag.Args(), " ")
 		if verboseFlag {
 			log.Printf("Running Primary Command: `%s`\n", cmdString)
@@ -293,4 +300,5 @@ func main() {
 
 	wg.Wait()
 
+	os.Exit(exitCode)
 }

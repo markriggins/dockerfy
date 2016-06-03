@@ -22,9 +22,14 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd) {
 		log.Fatalf("Could not copy secrets files", err)
 	}
 
+	for i, arg := range cmd.Args {
+		cmd.Args[i] = string_template_eval(arg)
+	}
+
 	// start the cmd
 	err := cmd.Start()
 	if err != nil {
+		// TODO: bubble the platform-specific exit code of the process up via global exitCode
 		log.Fatalf("Error starting command: `%s` - %s\n", toString(cmd), err)
 	}
 

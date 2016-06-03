@@ -215,14 +215,17 @@ run-option-expansion-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
 	@echo "\n\nrun-option-expansion-test:"
-	@echo "\tVerify that {{ .Env.VARS }} are expanded before use by dockerfy and $VARS are NOT"
+	@echo "\tVerify that {{ .Env.VARS }} are expanded before use by dockerfy and \$$VARS are NOT"
 	@echo "################################################################################"
-	docker run -d -it -e SECRETS_FILES=/secrets/secrets.json:/secrets/secrets.2.json \
+	docker run -d -it -e SECRETS_FILES=/secrets/secrets.json \
 		-e DB_NAME="My-Db" -e DB_HOST=localhost  \
 	    --name test-nginx nginx-with-dockerfy-and-zombie-maker \
+	    --verbose \
+		--secrets-files /secrets/secrets.2.json \
 	    --run echo 'DB_HOST={{ .Env.DB_HOST }}' -- \
 		--run echo 'DB_NAME_XP_1=$$DB_NAME' -- \
 		--run echo 'DB_NAME_XP_2={{ .Env.DB_NAME }}' --  \
+		--run echo 'AnotherSecret={{ .Secret.AnotherSecret }}' -- \
 		echo 'JSON_SECRET={{ .Secret.JSON_SECRET }}'
 
 
@@ -230,10 +233,11 @@ run-option-expansion-test:
 	docker logs test-nginx 2>/dev/null 
 	docker logs test-nginx 2>/dev/null | fgrep -q -- 'DB_HOST=localhost'
 	docker logs test-nginx 2>/dev/null | fgrep -q -- 'JSON_SECRET=Jason Voorhees did it'
+	docker logs test-nginx 2>/dev/null | fgrep -q -- 'AnotherSecret=Jason Voorhees is still alive'
 	docker logs test-nginx 2>/dev/null | fgrep -q -- 'DB_NAME_XP_1=$$DB_NAME'
 	docker logs test-nginx 2>/dev/null | fgrep -q -- 'DB_NAME_XP_2=My-Db'
 
-	@docker rm -f test-nginx >/dev/null 2>&1 || true
+	# @docker rm -f test-nginx >/dev/null 2>&1 || true
 	@echo "run-option-expansion-test PASSED"
 		
 
