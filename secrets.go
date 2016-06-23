@@ -65,6 +65,11 @@ func getSecretsFileNames() []string {
 	for _, secretsFileName := range secretsFilesFlag {
 		secretsFileNames = append(secretsFileNames, strings.Split(secretsFileName, ":")...)
 	}
+	// Allow template substitutions in file names.   Works for {{ .Env.VAR }}, but not for {{ .Secret.VAR }}
+	for i, secretsFileName := range secretsFileNames {
+		secretsFileNames[i] = string_template_eval(secretsFileName)
+	}
+
 	return secretsFileNames
 }
 
@@ -109,9 +114,9 @@ func getSecrets() map[string]string {
 				}
 				key, value := parts[0], strings.Trim(strings.TrimSpace(parts[1]), `'"`)
 				secrets[key] = value
-				if verboseFlag {
-					log.Printf("loaded secret: %s", key)
-				}
+				//if verboseFlag {
+				//	log.Printf("loaded secret: %s", key)
+				//}
 			}
 		} else if strings.HasSuffix(secretsFileName, ".json") {
 			jsonData, err := ioutil.ReadAll(secretsFile)
@@ -124,9 +129,9 @@ func getSecrets() map[string]string {
 			}
 			for key, value := range secrets {
 				secrets[key] = value
-				if verboseFlag {
-					log.Printf("loaded secret: %s", key)
-				}
+				//if verboseFlag {
+				//	log.Printf("loaded secret: %s", key)
+				//}
 			}
 		} else {
 			log.Fatalf("Unknown file extension '%s' must end with .env or .json\n", secretsFileName)

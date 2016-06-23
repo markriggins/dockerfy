@@ -16,9 +16,8 @@ COPY default.conf.tmpl /etc/nginx/conf.d/default.conf.tmpl
 COPY overlays /tmp/overlays
 COPY .zombie-maker-debian-binary /usr/local/bin/zombie-maker
 
-# normally /secrets would be a mounted volume
-COPY secrets.json /secrets/secrets.json
-COPY secrets.2.json /secrets/secrets.2.json
+# normally /secrets would be a mounted volume -- we're COPY'ing these into the image so we can run unit tests
+COPY secrets.* /secrets/
  
 EXPOSE 80
 
