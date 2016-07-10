@@ -21,7 +21,7 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
 ## Dockerfile Example
 
     FROM markriggins/nginx-with-dockerfy
-    
+
     ENTRYPOINT [ "dockerfy",                                                                            \
                     "--secrets-files", "/secrets/secrets.env",                                          \
                     "--overlay", "/app/overlays/{{ .Env.DEPLOYMENT_ENV }}/html/:/usr/share/nginx/html",         \
@@ -44,27 +44,27 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
       environment:
         - SECRETS_FILES=/secrets/secrets.env
 
-      entrypoint: 
+      entrypoint:
         - dockerfy
 
-      command: [ 
-        "--overlay", "/app/overlays/{{ .Env.DEPLOYMENT_ENV }}/html/:/usr/share/nginx/html",         
-        "--template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",                         
-        "--wait", "tcp://{{ .Env.MYSQLSERVER }}:{{ .Env.MYSQLPORT }}", "--timeout", "60s",  
-        "--wait", "tcp://{{ .Env.MYSQLSERVER }}:{{ .Env.MYSQLPORT }}", "--timeout", "60s",                  
-        "--run", "/app/bin/migrate_lock", "--server='{{ .Env.MYSQLSERVER }}:{{ .Env.MYSQLPORT }}'",  "--",     
+      command: [
+        "--overlay", "/app/overlays/{{ .Env.DEPLOYMENT_ENV }}/html/:/usr/share/nginx/html",
+        "--template", "/app/nginx.conf.tmpl:/etc/nginx/nginx.conf",
+        "--wait", "tcp://{{ .Env.MYSQLSERVER }}:{{ .Env.MYSQLPORT }}", "--timeout", "60s",
+        "--wait", "tcp://{{ .Env.MYSQLSERVER }}:{{ .Env.MYSQLPORT }}", "--timeout", "60s",
+        "--run", "/app/bin/migrate_lock", "--server='{{ .Env.MYSQLSERVER }}:{{ .Env.MYSQLPORT }}'",  "--",
         "--start", "/app/bin/cache-cleaner-daemon", "-p", '{{ .Secret.DB_PASSWORD }}', "--",
-        "--reap",   
-        "--user", "nobody", 
+        "--reap",
+        "--user", "nobody",
         '--', 'nginx', '-g', 'daemon off;' ]
 
-			
+
 
 The above example will run the nginx program inside a docker container, but **before nginx starts**, **dockerfy** will:
 
 1. **Sparsely Overlay** files from the application's /app/overlays directory tree from /app/overlays/${DEPLOYMENT_ENV}/html **onto** /usr/share/nginx/html.  For example, the robots.txt file might be restrictive in the "staging" deployment environment, but relaxed in "production", so the application can maintain separate copies of robots.txt for each deployment environment: /app/overlays/staging/robots.txt, and /app/overlays/production/robots.txt.   Overlays add or replace files similar to `cp -R` withou affecting other existing files in the target directory.
 2. **Load secret settings** from a file a /secrets/secrets.env, that become available for use in templates as {{ .Secret.**VARNAME** }}
-3. **Execute the nginx.conf.tmpl template**. This template uses the powerful go language templating features to substitute environment variables and secret settings directly into the nginx.conf file. (Which is handy since nginx doesn't read the environment itself.)  Every occurance of {{ .Env.**VARNAME** }} will be replaced with the value of $VARNAME, and every {{ .Secret.**VARNAME** }} will be replaced with the secret value of VARNAME. 
+3. **Execute the nginx.conf.tmpl template**. This template uses the powerful go language templating features to substitute environment variables and secret settings directly into the nginx.conf file. (Which is handy since nginx doesn't read the environment itself.)  Every occurance of {{ .Env.**VARNAME** }} will be replaced with the value of $VARNAME, and every {{ .Secret.**VARNAME** }} will be replaced with the secret value of VARNAME.
 4. **Wait** for the http://{{ .Env.MYSQLSERVER }} server to start accepting requests on port {{ .Env.MYSQLPORT }} for up to 60 seconds
 5. **Run migrate_lock** a program to perform a Django/MySql database migration to update the database schema, and wait for it to finish.
 6. **Start the cache-cleaner-daemon**, which will run in the background presumably cleaning up stale cache files while nginx runs
@@ -85,7 +85,7 @@ The "--" argument is used to signify the end of arguments for a --start or --run
 
 
 # Typical Use-Case
-The typical use case for **dockerfy** is when you have an 
+The typical use case for **dockerfy** is when you have an
 application that:
 
 1. Relies strictly on configuration files to initialize itself. For example, ningx does not use environment variables directly inside nginx.conf files
@@ -120,7 +120,7 @@ Overlays are used provide alternative versions of entire files for various deplo
 The entire ./overlays files must be COPY'd into the Docker image (usually along with the application itself):
 
 	COPY / /app
-	
+
 Then the desired alternative for the files can be chosen at runtime use the --overlay *src:dest* option
 
 	$ dockefy --overlay /app/overlays/_commmon/html:/usr/share/nginx/ \
@@ -144,9 +144,9 @@ or secrets.json (which must be **a simple single-level dictionary of strings**)
 
     {
       "PROXY_PASSWORD": "a2luZzppc25ha2Vk"
-    }	
-	
-Secrets can be injected into configuration files by using [Secrets in Templates](https://github.com/markriggins/dockerfy#secrets-in-templates). 
+    }
+
+Secrets can be injected into configuration files by using [Secrets in Templates](https://github.com/markriggins/dockerfy#secrets-in-templates).
 
 For convenience, all secrets files are combined into ~/.secrets/combined_secrets.json inside the ephemeral running
 container.  So JavaScript, Python and Go programs can load the secrets programatically, if desired.  The combined secrets
@@ -174,7 +174,7 @@ This `--template src:dest` option uses the powerful [go language templating](htt
         proxy_redirect {{ .Env.PROXY_PASS_URL }} $host;
       }
     }
-    
+
 In the above example, all occurances of the string  {{ .Env.PROXY_PASS_URL }} will be replaced with the value of $PROXY_PASS_URL from the container's environment, and {{ .Secret.PROXY_PASSWORD }} will be replaced with its value, giving the result:
 
 	server {
@@ -192,8 +192,8 @@ In the above example, all occurances of the string  {{ .Env.PROXY_PASS_URL }} wi
 
 Note: $host and $remote_addr are Nginx variable that are set on a per-request basis NOT from the environment.
 
-##### Advanced Templates 
-But go's templates offer advanced features such as if-statements and comments.  
+##### Advanced Templates
+But go's templates offer advanced features such as if-statements and comments.
 
 	server {
     {{/* only set up proxy_pass if PROXY_PASS_URL is set in the environment */}}
@@ -233,10 +233,10 @@ If you're running in development mode and mounting -v $PWD:/app in your docker c
 
 1. Create a ~/.secrets directory with permissions 700
 2. Create a separate secrets file for each application and deployment environment with permissions 600.  Having separate files allows you to avoid lumping all your secrets for all applications and deployment environments into a single file.
-	
+
 	~/.secrets/my-application--production.env
 	~/.secrets/my-application--staging.env
-	
+
 3. Export SECRETS_FILES=/secrets/my-application--$DEPLOYMENT_ENV.env
 4. Avoid writing templates to your mounted worktree.  **The expanded results might contain secrets!!** and even worse, if you forget to add them to your .gitignore file, then **your secrets could wind up on github.com!!**  Instead, write them to /etc/ or some other place inside the running container that will be forgotten when the container exits.
 
@@ -245,32 +245,34 @@ If you're running in development mode and mounting -v $PWD:/app in your docker c
 
 It is common when using tools like [Docker Compose](https://docs.docker.com/compose/) to depend on services in other linked containers, however oftentimes relying on [links](https://docs.docker.com/compose/compose-file/#links) is not enough - whilst the container itself may have _started_, the _service(s)_ within it may not yet be ready - resulting in shell script hacks to work around race conditions.
 
-**Dockerfy** gives you the ability to wait for services on a specified protocol (`tcp`, `tcp4`, `tcp6`, `http`, and `https`) before running commands, starting services, or starting your application.   
+**Dockerfy** gives you the ability to wait for services on a specified protocol (`tcp`, `tcp4`, `tcp6`, `http`, and `https`) before running commands, starting services, or starting your application.
 
 NOTE: MySql server is not an HTTP server, so use the tcp protocol instead of http
 
 	$ dockerfy --wait 'tcp://{{ .Env.MYSQLSERVER }}:{{ .Env.MYSQLPORT }}' --timeout 120s ...
-	
+
 You can specify multiple dependancies by repeating the --wait flag.  If the dependancies fail to become available before the timeout (which defaults to 10 seconds), then dockery will exit, and your primary command will not be run.
 
-### Running Commands 
+NOTE: If for some reason dockerfy cannot resolve the DNS names for links try exporting GODEBUG=netdns=cgo to force dockerfy to use cgo for DNS resolution.  This is a known issue on Docker version 1.12.0-rc3, build 91e29e8, experimental for OS X.
+
+### Running Commands
 The `--run` option gives you the opportunity to run commands **after** the overlays, secrets and templates have been processed, but **before** the primary program begins.  You can run anything you like, even bash scripts like this:
 
 	$ dockerfy  \
 		--run rm -rf /tmp/* -- \
 		--run bash -c "sleep 10, echo 'Lets get started now'" -- \
 		nginx -g "daemon off;"
-	
+
 All options up to but not including the '--' will be passed to the command.  You can run as many commands as you like, they will be run in the same order as how they were provided on the command line, and all commands must finish **successfully** or **dockerfy** will exit and your primary program will never run.
 
 
-### Starting Services 
+### Starting Services
 The `--start` option gives you the opportunity to start a commands as a service **after** the overlays, secrets and templates have been processed, and all --run commands have completed,  but **before** the primary program begins.  You can start anything you like as a service, even bash scripts like this:
 
 	$ dockerfy  \
 		--start "bash -c "while true; do rm -rf /tmp/cache/*; sleep 3600; done" -- \
 		nginx -g "daemon off;"
-	
+
 All options up to but not including the '--' will be passed to the command.  You can start as many services as you like, they will all be started in the same order as how they were provided on the command line, and all commands must continue **successfully** or **dockerfy** will
 stop your primary command and exit, and the container will stop.
 
@@ -281,7 +283,7 @@ The `--user` option gives you the ability specify which user accounts with which
     --user mark --run id -F -- \
     --user bob  --run id -F -- \
     --user 0    --run id -F -- \
-    id -a 
+    id -a
 
 The above command will first run the `id -F` command as user "mark", which will print mark's full name "Mark Riggins".
 Then it will print bob's full name.  Next it will print the full name of the account with user id 0, which happens to be "root".  Finally the primary command `id` will run with as the user account of the `last` invokation of the `--user` option, giving us the full id information for the root account.

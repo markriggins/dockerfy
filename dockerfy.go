@@ -111,21 +111,21 @@ Arguments:
 	`)
 	println(`   Run a command and reap any zombie children that the command forgets to reap
 
-       dockerfy --reap command 
+       dockerfy --reap command
 	     `)
 	println(`   Run /bin/echo before the main command runs:
-       
-       dockerfy --run /bin/echo -e "Starting -- command\n\n" 
+
+       dockerfy --run /bin/echo -e "Starting -- command\n\n"
 	     `)
 
 	println(`   Run or start all subsequent commands as user 'nginx'
 
-       dockerfy --user nginx /usr/bin/id 
+       dockerfy --user nginx /usr/bin/id
 	     `)
 
 	println(`   Start /bin/service before the main command runs and exit if the service fails:
-       
-       dockerfy --start /bin/sleep 5 -- /bin/service 
+
+       dockerfy --start /bin/sleep 5 -- /bin/service
 	     `)
 	println(`For more information, see https://github.com/markriggins/dockerfy`)
 }
@@ -133,6 +133,13 @@ Arguments:
 func main() {
 
 	log.SetPrefix("dockerfy: ")
+
+    // Bug on OS X beta Docker version 1.12.0-rc3, build 91e29e8, experimental
+    // cannot resolve link names that do not appear in /etc/hosts w/o using cgo.
+    // Setting this env var forces the use of cgo
+    //if os.Getenv("GODEBUG") != "" {
+    //    os.Setenv("GODEBUG", "netdns=cgo")
+    //}
 
 	flag.BoolVar(&versionFlag, "version", false, "show version")
 	flag.BoolVar(&helpFlag, "help", false, "print help message")
