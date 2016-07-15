@@ -46,14 +46,18 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd) int {
 			if verboseFlag {
 				log.Printf("Received signal: %s\n", sig)
 			}
-			signalProcessWithTimeout(cmd, sig)
-			if cancel != nil {
-				cancel()
-			}
+            signalProcessWithTimeout(cmd, sig)
+            if cancel != nil {
+                cancel()
+            }
 		case <-ctx.Done():
 			if verboseFlag {
-				log.Printf("Done waiting for signals")
+				log.Printf("context cancelled for cmd `%s`", toString(cmd))
 			}
+            cmd.Process.Kill()
+            if cancel != nil {
+                cancel()
+            }
 			// exit when context is done
 		}
 	}()

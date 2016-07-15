@@ -122,14 +122,15 @@ run-primary-stops-while-service-is-running-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
 	docker run -d -it --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose \
-		--start bash -c 'sleep 10 && echo "ERROR: service-1 STILL RUNNING"' -- \
-		--start bash -c 'sleep 10 && echo "ERROR: service-2 STILL RUNNING"' -- \
-		--start bash -c 'sleep 10 && echo "ERROR: service-3 STILL RUNNING"' -- \
-		sleep 5 >/dev/null
-	@sleep 7
+		--start bash -c 'sleep 60 && echo "ERROR: service-1 STILL RUNNING"' -- \
+		--start bash -c 'sleep 60 && echo "ERROR: service-2 STILL RUNNING"' -- \
+		--start bash -c 'sleep 60 && echo "ERROR: service-3 STILL RUNNING"' -- \
+		bash -c 'sleep 1; echo "PRIMARY DONE"' >/dev/null
+	@sleep 10
+	[ `docker inspect --format '{{.State.Status}}' test-nginx` == 'exited' ]
+	[ `docker logs test-nginx 2>&1  | egrep -c '^ERROR:.*STILL RUNNING'` == 0 ]
 	@docker logs test-nginx 2>&1  | egrep -q 'Primary Command.*stopped'
-	@docker logs test-nginx 2>&1  | egrep -q '^ERROR:.*STILLRUNNING' && exit 1 || true
-	@docker rm -f test-nginx >/dev/null 2>&1 || true
+	@docker logs test-nginx 2>&1  | egrep -q 'PRIMARY DONE'
 
 	@echo "run-primary-stops-while-service-is-running-test PASSED"
 
