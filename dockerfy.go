@@ -261,51 +261,58 @@ func main() {
 		}
 		// Run to completion, but do not cancel our ctx context
 		runCmd(context.Background(), func() {}, cmd)
-	}
-	for _, cmd := range commands.start {
-		if verboseFlag {
-			log.Printf("Starting Service: `%s`\n", toString(cmd))
-		}
-		wg.Add(1)
 
-		// Start each service, and bind them to our ctx context so
-		// 1) any failure will close/cancel ctx
-		// 2) if the primary command fails, then the services will be stopped
-		go runCmd(ctx, func() {
-			log.Printf("Service `%s` stopped\n", toString(cmd))
-			cancel()
-		}, cmd)
+        if exitCode != 0 {
+            log.Printf("--run cmd `%s` failed\n", toString(cmd))
+        }
 	}
 
-	if flag.NArg() > 0 {
+	if exitCode == 0 {
+        for _, cmd := range commands.start {
+            if verboseFlag {
+                log.Printf("Starting Service: `%s`\n", toString(cmd))
+            }
+            wg.Add(1)
 
-		// perform template substitution on primary cmd
-		//for i, arg := range flag.Args() {
-		//	flag.Args()[i] = string_template_eval(arg)
-		//}
+            // Start each service, and bind them to our ctx context so
+            // 1) any failure will close/cancel ctx
+            // 2) if the primary command fails, then the services will be stopped
+            go runCmd(ctx, func() {
+                log.Printf("Service `%s` stopped\n", toString(cmd))
+                cancel()
+            }, cmd)
+        }
 
-		var cmdString = strings.Join(flag.Args(), " ")
-		if verboseFlag {
-			log.Printf("Running Primary Command: `%s`\n", cmdString)
-		}
-		wg.Add(1)
+    	if flag.NArg() > 0 {
 
-		primary_command := exec.Command(flag.Arg(0), flag.Args()[1:]...)
-		primary_command.SysProcAttr = &syscall.SysProcAttr{Credential: commands.credential}
-		go runCmd(ctx, func() {
-			log.Printf("Primary Command `%s` stopped\n", cmdString)
-			cancel()
-		}, primary_command)
-	} else {
-		cancel()
-	}
+    		// perform template substitution on primary cmd
+    		//for i, arg := range flag.Args() {
+    		//	flag.Args()[i] = string_template_eval(arg)
+    		//}
 
-	if reapFlag {
-		wg.Add(1)
-		go ReapChildren(ctx, reapPollIntervalFlag)
-	}
+    		var cmdString = strings.Join(flag.Args(), " ")
+    		if verboseFlag {
+    			log.Printf("Running Primary Command: `%s`\n", cmdString)
+    		}
+    		wg.Add(1)
 
-	wg.Wait()
+    		primary_command := exec.Command(flag.Arg(0), flag.Args()[1:]...)
+    		primary_command.SysProcAttr = &syscall.SysProcAttr{Credential: commands.credential}
+    		go runCmd(ctx, func() {
+    			log.Printf("Primary Command `%s` stopped\n", cmdString)
+    			cancel()
+    		}, primary_command)
+    	} else {
+    		cancel()
+    	}
+
+    	if reapFlag {
+    		wg.Add(1)
+    		go ReapChildren(ctx, reapPollIntervalFlag)
+    	}
+
+    	wg.Wait()
+    }
 
 	os.Exit(exitCode)
 }

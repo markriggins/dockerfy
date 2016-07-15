@@ -59,7 +59,7 @@ run-prod-secrets: stop
 test: build just-test
 
 just-test: start-tests run-zombie-test run-service-stops-too-soon-test run-primary-stops-while-service-is-running-test \
-		run-before-primary-test run-primary-service-exits run-wait-test run-user-option-test run-option-expansion-test run-exit-code-test
+		run-before-primary-test run-fails-before-primary-test run-primary-service-exits run-wait-test run-user-option-test run-option-expansion-test run-exit-code-test
 	@echo "\n\nALL TESTS PASSED"
 
 start-tests:
@@ -152,6 +152,23 @@ run-before-primary-test:
 	docker logs test-nginx 2>&1 | egrep -q '^2 DONE'
 	docker logs test-nginx 2>&1 | egrep -q '^3 DONE'
 	docker logs test-nginx 2>&1 | egrep -q '^4 PRIMARY COMMAND DONE'
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
+	@echo "run-before-primary-test PASSED"
+
+
+run-fails-before-primary-test:
+	@echo "\n\nrun-fails-before-primary-test:"
+	@echo "\tIf a --run command fails, the primary command should never start"
+	@echo "################################################################################"
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
+	docker run -d -it --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose \
+		--run bash -c 'echo "RUN COMMAND FAILED"; exit 1' -- \
+		bash -c "echo 'PRIMARY COMMAND DONE'"
+	@sleep 5
+	docker logs test-nginx 2>&1 | egrep -q '^RUN COMMAND FAILED'
+	docker logs test-nginx 2>&1 | egrep -q '^PRIMARY COMMAND DONE' && exit 1 || true
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
 	@echo "run-before-primary-test PASSED"
