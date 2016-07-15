@@ -252,9 +252,16 @@ func main() {
 		if verboseFlag {
 			log.Printf("Pre-Running: `%s`\n", toString(cmd))
 		}
-		// Run to completion, but do not cancel our ctx context
-		runCmd(context.Background(), func() {}, cmd)
+		wg.Add(1)
+		exitCode = runCmd(ctx, func() {
+			log.Printf("Secondary Command `%s` stopped\n", toString(cmd))
+			cancel()
+		}, cmd)
+		if exitCode > 0 {
+			os.Exit(exitCode)
+		}
 	}
+
 	for _, cmd := range commands.start {
 		if verboseFlag {
 			log.Printf("Starting Service: `%s`\n", toString(cmd))
@@ -285,7 +292,7 @@ func main() {
 
 		primary_command := exec.Command(flag.Arg(0), flag.Args()[1:]...)
 		primary_command.SysProcAttr = &syscall.SysProcAttr{Credential: commands.credential}
-		go runCmd(ctx, func() {
+		exitCode = runCmd(ctx, func() {
 			log.Printf("Primary Command `%s` stopped\n", cmdString)
 			cancel()
 		}, primary_command)

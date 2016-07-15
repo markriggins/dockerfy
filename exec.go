@@ -11,7 +11,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd) {
+func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd) int {
 	defer wg.Done()
 
 	cmd.Stdin = os.Stdin
@@ -60,18 +60,27 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd) {
 
 	err = cmd.Wait()
 
+	exitCode := 0
+
 	if err == nil {
 		if verboseFlag {
 			log.Printf("Command finished successfully: `%s`\n", toString(cmd))
 		}
 	} else {
 		log.Printf("Command `%s` exited with error: %s\n", toString(cmd), err)
+		if exiterr, ok := err.(*exec.ExitError); ok {
+			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+				exitCode = status.ExitStatus()
+			}
+		}
 		// OPTIMIZE: This could be cleaner
 		// os.Exit(err.(*exec.ExitError).Sys().(syscall.WaitStatus).ExitStatus())
 	}
 	if cancel != nil {
 		cancel()
 	}
+
+	return exitCode
 }
 
 func signalProcessWithTimeout(cmd *exec.Cmd, sig os.Signal) {
