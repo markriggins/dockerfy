@@ -7,10 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-    "regexp"
-    "strconv"
 
-    //"github.com/kr/pretty"
 	"golang.org/x/net/context"
 )
 
@@ -61,23 +58,16 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd) {
 		}
 	}()
 
-	cmd_err := cmd.Wait()
+	err = cmd.Wait()
 
-	if cmd_err == nil {
+	if err == nil {
 		if verboseFlag {
 			log.Printf("Command finished successfully: `%s`\n", toString(cmd))
 		}
 	} else {
-        re := regexp.MustCompile(`([0-9]+)`) // want to know what is in front of 'at'
-        res := re.FindAllString(cmd_err.Error(), 1)
-        exit_code := 1
-        if len(res) > 0 {
-            exit_code, _ = strconv.Atoi(res[0])
-            exitCode = exit_code
-            log.Printf("Command `%s` exited with exit_code: %d\n", toString(cmd), exit_code)
-        } else {
-            log.Printf("Command `%s` exited with error: %s\n", toString(cmd), cmd_err)
-        }
+		log.Printf("Command `%s` exited with error: %s\n", toString(cmd), err)
+		// OPTIMIZE: This could be cleaner
+		// os.Exit(err.(*exec.ExitError).Sys().(syscall.WaitStatus).ExitStatus())
 	}
 	if cancel != nil {
 		cancel()
