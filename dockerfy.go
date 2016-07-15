@@ -252,9 +252,16 @@ func main() {
 		if verboseFlag {
 			log.Printf("Pre-Running: `%s`\n", toString(cmd))
 		}
-		// Run to completion, but do not cancel our ctx context
-		runCmd(context.Background(), func() {}, cmd)
+		wg.Add(1)
+		exitCode = runCmd(ctx, func() {
+			log.Printf("Secondary Command `%s` stopped\n", toString(cmd))
+			cancel()
+		}, cmd)
+		if exitCode > 0 {
+			os.Exit(exitCode)
+		}
 	}
+
 	for _, cmd := range commands.start {
 		if verboseFlag {
 			log.Printf("Starting Service: `%s`\n", toString(cmd))
