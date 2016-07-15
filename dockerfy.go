@@ -111,21 +111,21 @@ Arguments:
 	`)
 	println(`   Run a command and reap any zombie children that the command forgets to reap
 
-       dockerfy --reap command
+       dockerfy --reap command 
 	     `)
 	println(`   Run /bin/echo before the main command runs:
-
-       dockerfy --run /bin/echo -e "Starting -- command\n\n"
+       
+       dockerfy --run /bin/echo -e "Starting -- command\n\n" 
 	     `)
 
 	println(`   Run or start all subsequent commands as user 'nginx'
 
-       dockerfy --user nginx /usr/bin/id
+       dockerfy --user nginx /usr/bin/id 
 	     `)
 
 	println(`   Start /bin/service before the main command runs and exit if the service fails:
-
-       dockerfy --start /bin/sleep 5 -- /bin/service
+       
+       dockerfy --start /bin/sleep 5 -- /bin/service 
 	     `)
 	println(`For more information, see https://github.com/markriggins/dockerfy`)
 }
@@ -133,13 +133,6 @@ Arguments:
 func main() {
 
 	log.SetPrefix("dockerfy: ")
-
-    // Bug on OS X beta Docker version 1.12.0-rc3, build 91e29e8, experimental
-    // cannot resolve link names that do not appear in /etc/hosts w/o using cgo.
-    // Setting this env var forces the use of cgo
-    //if os.Getenv("GODEBUG") != "" {
-    //    os.Setenv("GODEBUG", "netdns=cgo")
-    //}
 
 	flag.BoolVar(&versionFlag, "version", false, "show version")
 	flag.BoolVar(&helpFlag, "help", false, "print help message")
@@ -261,58 +254,51 @@ func main() {
 		}
 		// Run to completion, but do not cancel our ctx context
 		runCmd(context.Background(), func() {}, cmd)
+	}
+	for _, cmd := range commands.start {
+		if verboseFlag {
+			log.Printf("Starting Service: `%s`\n", toString(cmd))
+		}
+		wg.Add(1)
 
-        if exitCode != 0 {
-            log.Printf("--run cmd `%s` failed\n", toString(cmd))
-        }
+		// Start each service, and bind them to our ctx context so
+		// 1) any failure will close/cancel ctx
+		// 2) if the primary command fails, then the services will be stopped
+		go runCmd(ctx, func() {
+			log.Printf("Service `%s` stopped\n", toString(cmd))
+			cancel()
+		}, cmd)
 	}
 
-	if exitCode == 0 {
-        for _, cmd := range commands.start {
-            if verboseFlag {
-                log.Printf("Starting Service: `%s`\n", toString(cmd))
-            }
-            wg.Add(1)
+	if flag.NArg() > 0 {
 
-            // Start each service, and bind them to our ctx context so
-            // 1) any failure will close/cancel ctx
-            // 2) if the primary command fails, then the services will be stopped
-            go runCmd(ctx, func() {
-                log.Printf("Service `%s` stopped\n", toString(cmd))
-                cancel()
-            }, cmd)
-        }
+		// perform template substitution on primary cmd
+		//for i, arg := range flag.Args() {
+		//	flag.Args()[i] = string_template_eval(arg)
+		//}
 
-    	if flag.NArg() > 0 {
+		var cmdString = strings.Join(flag.Args(), " ")
+		if verboseFlag {
+			log.Printf("Running Primary Command: `%s`\n", cmdString)
+		}
+		wg.Add(1)
 
-    		// perform template substitution on primary cmd
-    		//for i, arg := range flag.Args() {
-    		//	flag.Args()[i] = string_template_eval(arg)
-    		//}
+		primary_command := exec.Command(flag.Arg(0), flag.Args()[1:]...)
+		primary_command.SysProcAttr = &syscall.SysProcAttr{Credential: commands.credential}
+		go runCmd(ctx, func() {
+			log.Printf("Primary Command `%s` stopped\n", cmdString)
+			cancel()
+		}, primary_command)
+	} else {
+		cancel()
+	}
 
-    		var cmdString = strings.Join(flag.Args(), " ")
-    		if verboseFlag {
-    			log.Printf("Running Primary Command: `%s`\n", cmdString)
-    		}
-    		wg.Add(1)
+	if reapFlag {
+		wg.Add(1)
+		go ReapChildren(ctx, reapPollIntervalFlag)
+	}
 
-    		primary_command := exec.Command(flag.Arg(0), flag.Args()[1:]...)
-    		primary_command.SysProcAttr = &syscall.SysProcAttr{Credential: commands.credential}
-    		go runCmd(ctx, func() {
-    			log.Printf("Primary Command `%s` stopped\n", cmdString)
-    			cancel()
-    		}, primary_command)
-    	} else {
-    		cancel()
-    	}
-
-    	if reapFlag {
-    		wg.Add(1)
-    		go ReapChildren(ctx, reapPollIntervalFlag)
-    	}
-
-    	wg.Wait()
-    }
+	wg.Wait()
 
 	os.Exit(exitCode)
 }
