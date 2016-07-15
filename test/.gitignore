@@ -4,3 +4,4 @@
 *.mk.*
 zombie-maker
 .zombie-maker-debian-binary
+.python-version

@@ -67,6 +67,7 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd) int {
 			log.Printf("Command finished successfully: `%s`\n", toString(cmd))
 		}
 	} else {
+        exitCode = 1
 		log.Printf("Command `%s` exited with error: %s\n", toString(cmd), err)
 		if exiterr, ok := err.(*exec.ExitError); ok {
 			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {

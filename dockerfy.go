@@ -111,21 +111,21 @@ Arguments:
 	`)
 	println(`   Run a command and reap any zombie children that the command forgets to reap
 
-       dockerfy --reap command 
+       dockerfy --reap command
 	     `)
 	println(`   Run /bin/echo before the main command runs:
-       
-       dockerfy --run /bin/echo -e "Starting -- command\n\n" 
+
+       dockerfy --run /bin/echo -e "Starting -- command\n\n"
 	     `)
 
 	println(`   Run or start all subsequent commands as user 'nginx'
 
-       dockerfy --user nginx /usr/bin/id 
+       dockerfy --user nginx /usr/bin/id
 	     `)
 
 	println(`   Start /bin/service before the main command runs and exit if the service fails:
-       
-       dockerfy --start /bin/sleep 5 -- /bin/service 
+
+       dockerfy --start /bin/sleep 5 -- /bin/service
 	     `)
 	println(`For more information, see https://github.com/markriggins/dockerfy`)
 }
@@ -246,66 +246,63 @@ func main() {
 		go tailFile(ctx, cancel, string_template_eval(logFile), logPollFlag, os.Stderr)
 	}
 
+    exitCode = 0
+
 	// Process -start and -run flags
 	for _, cmd := range commands.run {
 
 		if verboseFlag {
 			log.Printf("Pre-Running: `%s`\n", toString(cmd))
 		}
-		wg.Add(1)
-		exitCode = runCmd(ctx, func() {
-			log.Printf("Secondary Command `%s` stopped\n", toString(cmd))
-			cancel()
-		}, cmd)
-		if exitCode > 0 {
-			os.Exit(exitCode)
+		exitCode = runCmd(ctx, func(){}, cmd)
+		if exitCode != 0 {
+            break
 		}
 	}
 
-	for _, cmd := range commands.start {
-		if verboseFlag {
-			log.Printf("Starting Service: `%s`\n", toString(cmd))
-		}
-		wg.Add(1)
+	if exitCode == 0 {
+        for _, cmd := range commands.start {
+    		if verboseFlag {
+    			log.Printf("Starting Service: `%s`\n", toString(cmd))
+    		}
+    		wg.Add(1)
 
-		// Start each service, and bind them to our ctx context so
-		// 1) any failure will close/cancel ctx
-		// 2) if the primary command fails, then the services will be stopped
-		go runCmd(ctx, func() {
-			log.Printf("Service `%s` stopped\n", toString(cmd))
-			cancel()
-		}, cmd)
-	}
+    		// Start each service, and bind them to our ctx context so
+    		// 1) any failure will close/cancel ctx
+    		// 2) if the primary command fails, then the services will be stopped
+    		go runCmd(ctx, func() {
+    			log.Printf("Service `%s` stopped\n", toString(cmd))
+    			cancel()
+    		}, cmd)
+    	}
 
-	if flag.NArg() > 0 {
+        if reapFlag {
+            wg.Add(1)
+            go ReapChildren(ctx, reapPollIntervalFlag)
+        }
 
-		// perform template substitution on primary cmd
-		//for i, arg := range flag.Args() {
-		//	flag.Args()[i] = string_template_eval(arg)
-		//}
+    	if flag.NArg() > 0 {
 
-		var cmdString = strings.Join(flag.Args(), " ")
-		if verboseFlag {
-			log.Printf("Running Primary Command: `%s`\n", cmdString)
-		}
-		wg.Add(1)
+    		// perform template substitution on primary cmd
+    		//for i, arg := range flag.Args() {
+    		//	flag.Args()[i] = string_template_eval(arg)
+    		//}
 
-		primary_command := exec.Command(flag.Arg(0), flag.Args()[1:]...)
-		primary_command.SysProcAttr = &syscall.SysProcAttr{Credential: commands.credential}
-		exitCode = runCmd(ctx, func() {
-			log.Printf("Primary Command `%s` stopped\n", cmdString)
-			cancel()
-		}, primary_command)
-	} else {
-		cancel()
-	}
+    		var cmdString = strings.Join(flag.Args(), " ")
+    		if verboseFlag {
+    			log.Printf("Running Primary Command: `%s`\n", cmdString)
+    		}
 
-	if reapFlag {
-		wg.Add(1)
-		go ReapChildren(ctx, reapPollIntervalFlag)
-	}
-
-	wg.Wait()
+    		primary_command := exec.Command(flag.Arg(0), flag.Args()[1:]...)
+    		primary_command.SysProcAttr = &syscall.SysProcAttr{Credential: commands.credential}
+    		exitCode = runCmd(ctx, func() {
+    			log.Printf("Primary Command `%s` stopped\n", cmdString)
+    			cancel()
+    		}, primary_command)
+            cancel()
+    	}
+        wg.Wait()
+    }
 
 	os.Exit(exitCode)
 }

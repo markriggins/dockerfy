@@ -89,10 +89,8 @@ run-zombie-test:
 	docker exec test-nginx ps -ef | egrep defunct || true
 	@docker exec test-nginx ps -ef | egrep -q defunct  && exit 1 || true
 
-	@echo "\nLogs"
+	@echo "\nMake sure all 10 zombies got reaped"
 	@echo "--------------------------------------------------------------------------"
-	@docker logs test-nginx
-
 	@docker logs test-nginx 2>&1| egrep -q 'Reaped 10 zombies' || (echo FAILED TO REAP; exit 1)
 
 	@echo "run-zombie-test PASSED"
