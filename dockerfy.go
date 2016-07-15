@@ -285,7 +285,7 @@ func main() {
 
 		primary_command := exec.Command(flag.Arg(0), flag.Args()[1:]...)
 		primary_command.SysProcAttr = &syscall.SysProcAttr{Credential: commands.credential}
-		go runCmd(ctx, func() {
+		exitCode = runCmd(ctx, func() {
 			log.Printf("Primary Command `%s` stopped\n", cmdString)
 			cancel()
 		}, primary_command)
