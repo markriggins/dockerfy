@@ -6,7 +6,7 @@ TAG:=`git describe --tags`
 build: .zombie-maker-debian-binary .mk.nginx-with-dockerfy-and-zombie-maker
 
 
-.mk.nginx-with-dockerfy-and-zombie-maker: 
+.mk.nginx-with-dockerfy-and-zombie-maker:
 	cd .. && make nginx-with-dockerfy
 	docker build -t  nginx-with-dockerfy-and-zombie-maker .
 
@@ -59,14 +59,14 @@ run-prod-secrets: stop
 test: build just-test
 
 just-test: start-tests run-zombie-test run-service-stops-too-soon-test run-primary-stops-while-service-is-running-test \
-		run-before-primary-test run-primary-service-exits run-wait-test run-user-option-test run-option-expansion-test
+		run-before-primary-test run-primary-service-exits run-wait-test run-user-option-test run-option-expansion-test run-exit-code-test
 	@echo "\n\nALL TESTS PASSED"
 
 start-tests:
 	@echo "\nRunning all tests"
 	@echo "################################################################################"
 
-run-zombie-test: 
+run-zombie-test:
 	@echo "\n\nRunning Zombie Test -- expect 10 zombies to get reaped"
 	@echo "################################################################################"
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
@@ -82,7 +82,7 @@ run-zombie-test:
 	@echo "\nPs -ef looking initial zombies"
 	@echo "--------------------------------------------------------------------------"
 	docker exec test-nginx ps -ef | egrep defunct
-	
+
 	@sleep 5
 	@echo "\nPs -ef looking for leftover zombies -- should be empty"
 	@echo "--------------------------------------------------------------------------"
@@ -91,7 +91,7 @@ run-zombie-test:
 
 	@echo "\nLogs"
 	@echo "--------------------------------------------------------------------------"
-	@docker logs test-nginx 
+	@docker logs test-nginx
 
 	@docker logs test-nginx 2>&1| egrep -q 'Reaped 10 zombies' || (echo FAILED TO REAP; exit 1)
 
@@ -100,7 +100,7 @@ run-zombie-test:
 
 
 
-run-service-stops-too-soon-test: 
+run-service-stops-too-soon-test:
 	@echo "\n\nRunning 'run-service-stops-too-soon-test'"
 	@echo "\tWhen the service exits, the primary command should also stop"
 	@echo "################################################################################"
@@ -110,14 +110,14 @@ run-service-stops-too-soon-test:
 		--start bash -c 'sleep 5 && echo "service exiting"' -- \
 		sleep 10 >/dev/null
 	@sleep 7
-	docker logs test-nginx 2>&1 | egrep -q 'Service.*stopped' 
+	docker logs test-nginx 2>&1 | egrep -q 'Service.*stopped'
 	@echo "\t Service Stopped"
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
 	@echo "run-service-stops-too-soon-test PASSED"
 
 
-run-primary-stops-while-service-is-running-test: 
+run-primary-stops-while-service-is-running-test:
 	@echo "\n\nRunning 'run-primary-stops-while-service-is-running-test'"
 	@echo "\tThis should kill the services before they have a chance to finish"
 	@echo "################################################################################"
@@ -134,7 +134,7 @@ run-primary-stops-while-service-is-running-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
 	@echo "run-primary-stops-while-service-is-running-test PASSED"
-	
+
 
 run-before-primary-test:
 	@echo "\n\nrun-before-primary-test:"
@@ -148,10 +148,10 @@ run-before-primary-test:
 		--run bash -c 'echo "3 DONE"' -- \
 		bash -c "sleep 4; echo '4 PRIMARY COMMAND DONE'"
 	@sleep 15
-	docker logs test-nginx 2>&1 | egrep -q '^1 DONE' 
-	docker logs test-nginx 2>&1 | egrep -q '^2 DONE' 
-	docker logs test-nginx 2>&1 | egrep -q '^3 DONE' 
-	docker logs test-nginx 2>&1 | egrep -q '^4 PRIMARY COMMAND DONE' 
+	docker logs test-nginx 2>&1 | egrep -q '^1 DONE'
+	docker logs test-nginx 2>&1 | egrep -q '^2 DONE'
+	docker logs test-nginx 2>&1 | egrep -q '^3 DONE'
+	docker logs test-nginx 2>&1 | egrep -q '^4 PRIMARY COMMAND DONE'
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
 	@echo "run-before-primary-test PASSED"
@@ -162,7 +162,7 @@ run-primary-service-exits:
 	@echo "\n\nrun-primary-service-exits:"
 	@echo "\tVerify that when the primary service finishes, the container exits"
 	@echo "################################################################################"
-	docker run -it --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose echo DONE 
+	docker run -it --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose echo DONE
 	docker inspect --format '{{ .State.Status }}' test-nginx | egrep -q exited
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
@@ -232,7 +232,7 @@ run-option-expansion-test:
 
 
 	@sleep 5
-	docker logs test-nginx 2>/dev/null 
+	docker logs test-nginx 2>/dev/null
 	docker logs test-nginx 2>/dev/null | fgrep -q -- 'DB_HOST=localhost'
 	docker logs test-nginx 2>/dev/null | fgrep -q -- 'JSON_SECRET=Jason Voorhees did it'
 	docker logs test-nginx 2>/dev/null | fgrep -q -- 'AnotherSecret=Jason Voorhees is still alive'
@@ -242,7 +242,17 @@ run-option-expansion-test:
 
 	# @docker rm -f test-nginx >/dev/null 2>&1 || true
 	@echo "run-option-expansion-test PASSED"
-		
 
 
+run-exit-code-test:
+	@echo "\n\nrun-exit-code-test:"
+	@echo "\tVerify that dockerfy exits with the exit_code of the failing command"
+	@echo "################################################################################"
+	docker run -it --rm nginx-with-dockerfy-and-zombie-maker --verbose \
+		-- bash -c 'exit 5' || [ $$? == 5 ]
+	docker run -it --rm nginx-with-dockerfy-and-zombie-maker --verbose \
+		--run bash -c 'exit 3' -- bash -c 'exit 5' || [ $$? == 3 ]
+	docker run -it --rm nginx-with-dockerfy-and-zombie-maker --verbose \
+		--start bash -c 'sleep 2; exit 3' -- bash -c 'exit 5' || [ $$? == 5 ]
+	@echo "run-exit-code-test PASSED"
 
