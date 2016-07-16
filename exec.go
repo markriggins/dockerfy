@@ -11,7 +11,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd) {
+func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, cancel_when_finished bool) {
 	defer wg.Done()
 
 	cmd.Stdin = os.Stdin
@@ -40,37 +40,52 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-
 		select {
 		case sig := <-sigs:
 			if verboseFlag {
-				log.Printf("Received signal: %s\n", sig)
+                if sig != nil {
+                    log.Printf("Command `%s` received signal", toString(cmd))
+                } else {
+                    log.Printf("Command `%s` done waiting for signals", toString(cmd))
+                }
 			}
-			signalProcessWithTimeout(cmd, sig)
-			if cancel != nil {
-				cancel()
-			}
+            //cancel()
 		case <-ctx.Done():
 			if verboseFlag {
-				log.Printf("Done waiting for signals")
+                log.Printf("Command `%s` done waiting for signals (ctx.Done())", toString(cmd))
 			}
-			// exit when context is done
+            signalProcessWithTimeout(cmd, syscall.SIGTERM)
+            // already cancelled
 		}
 	}()
 
 	err = cmd.Wait()
+    close(sigs)
 
 	if err == nil {
 		if verboseFlag {
 			log.Printf("Command finished successfully: `%s`\n", toString(cmd))
 		}
+        if cancel_when_finished {
+            cancel()
+        }
 	} else {
-		log.Printf("Command `%s` exited with error: %s\n", toString(cmd), err)
+        log.Printf("Command `%s` exited with error: %s\n", toString(cmd), err)
+        if exiterr, ok := err.(*exec.ExitError); ok {
+            if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+                if exitCode == 0 {
+                    exitCode = status.ExitStatus()
+                }
+            }
+            if exitCode == 0 {
+                // If platform-specific exit_code cannot be determined exit with
+                // with generic 1 for failure
+                exitCode = 1
+            }
+        }
+        cancel()
 		// OPTIMIZE: This could be cleaner
 		// os.Exit(err.(*exec.ExitError).Sys().(syscall.WaitStatus).ExitStatus())
-	}
-	if cancel != nil {
-		cancel()
 	}
 }
 

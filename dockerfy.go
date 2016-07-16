@@ -132,7 +132,8 @@ Arguments:
 
 func main() {
 
-	log.SetPrefix("dockerfy: ")
+    exitCode = 0
+    log.SetPrefix("dockerfy: ")
 
     // Bug on OS X beta Docker version 1.12.0-rc3, build 91e29e8, experimental
     // cannot resolve link names that do not appear in /etc/hosts w/o using cgo.
@@ -243,25 +244,43 @@ func main() {
 	// Setup context
 	ctx, cancel = context.WithCancel(context.Background())
 
-	for _, logFile := range stdoutTailFlag {
-		wg.Add(1)
-		go tailFile(ctx, cancel, string_template_eval(logFile), logPollFlag, os.Stdout)
-	}
 
-	for _, logFile := range stderrTailFlag {
-		wg.Add(1)
-		go tailFile(ctx, cancel, string_template_eval(logFile), logPollFlag, os.Stderr)
-	}
-
-	// Process -start and -run flags
+    // Process -run flags
 	for _, cmd := range commands.run {
 
 		if verboseFlag {
 			log.Printf("Pre-Running: `%s`\n", toString(cmd))
 		}
-		// Run to completion, but do not cancel our ctx context
-		runCmd(context.Background(), func() {}, cmd)
+		// Run to completion, but do not cancel our ctx context unless we fail
+        wg.Add(1)
+		go runCmd(ctx, func() {
+            log.Printf("--run command `%s` finished\n", toString(cmd))
+            if exitCode != 0 {
+                cancel()
+            }
+        }, cmd, false /*cancel_when_finished*/)
+        wg.Wait()
+        log.Printf("ready for next cmd")
 	}
+
+    for _, logFile := range stdoutTailFlag {
+        wg.Add(1)
+        go tailFile(ctx, cancel, string_template_eval(logFile), logPollFlag, os.Stdout)
+    }
+
+    for _, logFile := range stderrTailFlag {
+        wg.Add(1)
+        go tailFile(ctx, cancel, string_template_eval(logFile), logPollFlag, os.Stderr)
+    }
+
+    // Start the reaper
+    if reapFlag {
+        wg.Add(1)
+        go ReapChildren(ctx, reapPollIntervalFlag)
+    }
+
+
+    // Process -run flags
 	for _, cmd := range commands.start {
 		if verboseFlag {
 			log.Printf("Starting Service: `%s`\n", toString(cmd))
@@ -272,9 +291,9 @@ func main() {
 		// 1) any failure will close/cancel ctx
 		// 2) if the primary command fails, then the services will be stopped
 		go runCmd(ctx, func() {
-			log.Printf("Service `%s` stopped\n", toString(cmd))
+			log.Printf("Service `%s` cancelled\n", toString(cmd))
 			cancel()
-		}, cmd)
+		}, cmd, true /*cancel_when_finished*/)
 	}
 
 	if flag.NArg() > 0 {
@@ -293,16 +312,13 @@ func main() {
 		primary_command := exec.Command(flag.Arg(0), flag.Args()[1:]...)
 		primary_command.SysProcAttr = &syscall.SysProcAttr{Credential: commands.credential}
 		go runCmd(ctx, func() {
-			log.Printf("Primary Command `%s` stopped\n", cmdString)
+            if verboseFlag {
+			 log.Printf("Primary Command `%s` finished\n", cmdString)
+            }
 			cancel()
-		}, primary_command)
+		}, primary_command, true /*cancel_when_finished*/)
 	} else {
 		cancel()
-	}
-
-	if reapFlag {
-		wg.Add(1)
-		go ReapChildren(ctx, reapPollIntervalFlag)
 	}
 
 	wg.Wait()
