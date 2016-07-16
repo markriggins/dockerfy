@@ -43,47 +43,47 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, cance
 		select {
 		case sig := <-sigs:
 			if verboseFlag {
-                if sig != nil {
-                    log.Printf("Command `%s` received signal", toString(cmd))
-                } else {
-                    log.Printf("Command `%s` done waiting for signals", toString(cmd))
-                }
+				if sig != nil {
+					log.Printf("Command `%s` received signal", toString(cmd))
+				} else {
+					log.Printf("Command `%s` done waiting for signals", toString(cmd))
+				}
 			}
-            //cancel()
+			//cancel()
 		case <-ctx.Done():
 			if verboseFlag {
-                log.Printf("Command `%s` done waiting for signals (ctx.Done())", toString(cmd))
+				log.Printf("Command `%s` done waiting for signals (ctx.Done())", toString(cmd))
 			}
-            signalProcessWithTimeout(cmd, syscall.SIGTERM)
-            // already cancelled
+			signalProcessWithTimeout(cmd, syscall.SIGTERM)
+			// already cancelled
 		}
 	}()
 
 	err = cmd.Wait()
-    close(sigs)
+	close(sigs)
 
 	if err == nil {
 		if verboseFlag {
 			log.Printf("Command finished successfully: `%s`\n", toString(cmd))
 		}
-        if cancel_when_finished {
-            cancel()
-        }
+		if cancel_when_finished {
+			cancel()
+		}
 	} else {
-        log.Printf("Command `%s` exited with error: %s\n", toString(cmd), err)
-        if exiterr, ok := err.(*exec.ExitError); ok {
-            if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-                if exitCode == 0 {
-                    exitCode = status.ExitStatus()
-                }
-            }
-            if exitCode == 0 {
-                // If platform-specific exit_code cannot be determined exit with
-                // with generic 1 for failure
-                exitCode = 1
-            }
-        }
-        cancel()
+		log.Printf("Command `%s` exited with error: %s\n", toString(cmd), err)
+		if exiterr, ok := err.(*exec.ExitError); ok {
+			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+				if exitCode == 0 {
+					exitCode = status.ExitStatus()
+				}
+			}
+			if exitCode == 0 {
+				// If platform-specific exit_code cannot be determined exit with
+				// with generic 1 for failure
+				exitCode = 1
+			}
+		}
+		cancel()
 		// OPTIMIZE: This could be cleaner
 		// os.Exit(err.(*exec.ExitError).Sys().(syscall.WaitStatus).ExitStatus())
 	}
