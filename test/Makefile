@@ -151,7 +151,7 @@ run-fails-before-primary-test:
 	@echo "################################################################################"
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
-	docker run -it --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose \
+	docker run -it --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose --debug \
 		--run bash -c 'echo "RUN COMMAND FAILED"; exit 1' -- \
 		bash -c "echo 'PRIMARY COMMAND DONE'" >/dev/null 2>&1 || true
 	docker logs test-nginx 2>&1 | egrep -q '^RUN COMMAND FAILED'
@@ -193,15 +193,22 @@ run-user-option-test:
 	@echo "################################################################################"
 	docker run -it -e SECRETS_FILES=/secrets/secrets.json:/secrets/secrets.2.json \
 	    --name test-nginx nginx-with-dockerfy-and-zombie-maker \
-		--run echo -n "MAIL:" -- --user mail  --run id -a -- \
-		--run ls -l '/var/spool/mail/.secrets' -- \
-		--run cat '/var/spool/mail/.secrets/combined_secrets.json' -- \
-		--run cat '/var/spool/mail/.secrets/secrets.json' -- \
-		--run /usr/bin/env -- \
-		--run echo -n "ROOT:" -- --user root  --run id -a -- \
-		--run /usr/bin/env -- \
-		--run echo -n "PRIMARY:" -- \
-		id -a >/dev/null 2>&1
+	    --debug \
+		\
+		--user mail \
+			--run echo -n "MAIL:" -- \
+		 	--run id -a -- \
+			--run ls -l '/var/spool/mail/.secrets' -- \
+			--run cat '/var/spool/mail/.secrets/combined_secrets.json' -- \
+			--run cat '/var/spool/mail/.secrets/secrets.json' -- \
+			--run /usr/bin/env -- \
+		\
+		--user root \
+			--run echo -n "ROOT:" -- \
+			--run id -a -- \
+			--run /usr/bin/env -- \
+			--run echo -n "PRIMARY:" -- \
+			id -a >/dev/null 2>&1
 	docker logs test-nginx 2>/dev/null| egrep -q -- '\-r\-* .*secrets.json'
 
 	docker logs test-nginx 2>/dev/null| fgrep -q -- 'SECRETS_FILE=/var/mail/.secrets/combined_secrets.json'
@@ -211,7 +218,6 @@ run-user-option-test:
 	docker logs test-nginx 2>/dev/null| fgrep -q -- '"JSON_SECRET": "Jason Voorhees did it"'
 	[ $$(docker logs test-nginx 2>/dev/null| fgrep -- 'uid=0(root) gid=0(root) groups=0(root)' | wc -l) == 2 ]
 	# '
-	@docker rm -f test-nginx >/dev/null 2>&1 || true
 	@echo "run-user-option-test PASSED"
 
 run-option-expansion-test:

@@ -133,7 +133,6 @@ If the source path ends with a /, then all subdirectories underneath it will be 
 
 Overlay sources that do not exist are simply skipped.  The allows you to specify potential sources of content that may or may not exist in the running container.  In the above example if $DEPLOYMENT_ENV environment variable is set to 'local' then the second overlaw will be skipped if there is no corresponding /app/overlays/local source directory, and the container will run with the '_common' html content.
 
-
 #### Loading Secret Settings
 Secrets can loaded from a file by using the `--secrets-files` option or the $SECRETS_FILES environment variable.   The secrets files ending with `.env` must contain simple NAME=VALUE lines, following bash shell conventions for definitions and comments. Leading and trailing quotes will be trimmed from the value.  Secrets files ending with `.json` will be loaded as JSON, and must be `a simple single-level dictionary of strings`
 
@@ -277,6 +276,11 @@ The `--start` option gives you the opportunity to start a commands as a service 
 
 All options up to but not including the '--' will be passed to the command.  You can start as many services as you like, they will all be started in the same order as how they were provided on the command line, and all commands must continue **successfully** or **dockerfy** will
 stop your primary command and exit, and the container will stop.
+
+#### Debugging Dockerfy
+If dockerfy isn't behaving as you expect, then try the `--debug` flag to view more detailed debugging output, including details about how `--run` and `--start` commands are processed.
+
+NOTE: The `--debug` flag is discouraged in production because it will leak the names of secrets variables to the logs
 
 ### Switching User Accounts
 The `--user` option gives you the ability specify which user accounts with which to run commands or start services.  The `--user` flag takes either a username or UID as its argument, and affects all subsequent commands.

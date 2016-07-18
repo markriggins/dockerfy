@@ -4,3 +4,4 @@ build/*
 .DS_Store
 .dockerfy*
 .python-version
+/blurbs/

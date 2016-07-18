@@ -31,27 +31,38 @@ func removeCommandsFromOsArgs() Commands {
 	var cmd *exec.Cmd
 	var cmd_user *user.User
 
+    if debugFlag {
+        log.Printf("")
+        log.Printf("dockerfy args BEFORE removing commands:\n")
+
+        for i := 0; i < len(os.Args); i++ {
+            log.Printf("\t%d: %s", i, os.Args[i])
+        }
+    }
+
 	for i := 0; i < len(os.Args); i++ {
+        // docker-compose.yml files are buggy on \ continuation characters
+        arg_i := strings.TrimSpace(os.Args[i])
 		switch {
-		case ("--start" == os.Args[i] || "-start" == os.Args[i]) && cmd == nil:
+		case ("--start" == arg_i || "-start" == arg_i) && cmd == nil:
 			cmd = &exec.Cmd{Stdout: os.Stdout,
 				Stderr:      os.Stderr,
 				SysProcAttr: &syscall.SysProcAttr{Credential: commands.credential}}
 			commands.start = append(commands.start, cmd)
 
-		case ("--run" == os.Args[i] || "-run" == os.Args[i]) && cmd == nil:
+		case ("--run" == arg_i || "-run" == arg_i) && cmd == nil:
 			cmd = &exec.Cmd{Stdout: os.Stdout,
 				Stderr:      os.Stderr,
 				SysProcAttr: &syscall.SysProcAttr{Credential: commands.credential}}
 			commands.run = append(commands.run, cmd)
 
-		case ("--user" == os.Args[i] || "-user" == os.Args[i]) && cmd == nil:
+		case ("--user" == arg_i || "-user" == arg_i) && cmd == nil:
 			if os.Getuid() != 0 {
 				log.Fatalf("dockerfy must run as root to use the --user flag")
 			}
 			cmd_user = &user.User{}
 
-		case "--" == os.Args[i] && cmd != nil: // End of args for this cmd
+		case "--" == arg_i && cmd != nil: // End of args for this cmd
 			cmd = nil
 
 		default:
@@ -59,7 +70,7 @@ func removeCommandsFromOsArgs() Commands {
 				// Expect a username or uid
 				var err1 error
 
-				user_name_or_id := os.Args[i]
+				user_name_or_id := arg_i
 				cmd_user, err1 = user.LookupId(user_name_or_id)
 				if cmd_user == nil {
 					// Not a userid, try as a username
@@ -79,14 +90,14 @@ func removeCommandsFromOsArgs() Commands {
 			} else if cmd != nil {
 				// Expect a command first, then a series of arguments
 				if len(cmd.Path) == 0 {
-					cmd.Path = os.Args[i]
+					cmd.Path = arg_i
 					if filepath.Base(cmd.Path) == cmd.Path {
 						cmd.Path, _ = exec.LookPath(cmd.Path)
 					}
 				}
-				cmd.Args = append(cmd.Args, os.Args[i])
+				cmd.Args = append(cmd.Args, arg_i)
 			} else {
-				newOsArgs = append(newOsArgs, os.Args[i])
+				newOsArgs = append(newOsArgs, arg_i)
 			}
 		}
 	}
@@ -97,6 +108,16 @@ func removeCommandsFromOsArgs() Commands {
 		log.Fatalf("need a command after the --start or --run flag")
 	}
 	os.Args = newOsArgs
+
+    if debugFlag {
+        log.Printf("")
+        log.Printf("dockerfy args AFTER removing commands:\n")
+
+        for i := 0; i < len(os.Args); i++ {
+            log.Printf("\t%d: %s", i, os.Args[i])
+        }
+    }
+
 	return commands
 }
 

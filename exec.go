@@ -32,6 +32,9 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, cance
 		// TODO: bubble the platform-specific exit code of the process up via global exitCode
 		log.Fatalf("Error starting command: `%s` - %s\n", toString(cmd), err)
 	}
+    if debugFlag && cmd.SysProcAttr != nil && cmd.SysProcAttr.Credential != nil {
+        log.Printf("command running as uid %d", cmd.SysProcAttr.Credential.Uid)
+    }
 
 	// Setup signaling -- a separate channel for goroutine for each command
 	sigs := make(chan os.Signal, 1)
@@ -42,7 +45,7 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, cance
 		defer wg.Done()
 		select {
 		case sig := <-sigs:
-			if verboseFlag {
+			if debugFlag {
 				if sig != nil {
 					log.Printf("Command `%s` received signal", toString(cmd))
 				} else {
@@ -51,7 +54,7 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, cance
 			}
 			//cancel()
 		case <-ctx.Done():
-			if verboseFlag {
+			if debugFlag {
 				log.Printf("Command `%s` done waiting for signals (ctx.Done())", toString(cmd))
 			}
 			signalProcessWithTimeout(cmd, syscall.SIGTERM)

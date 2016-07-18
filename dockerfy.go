@@ -50,7 +50,8 @@ var (
 	stdoutTailFlag       sliceVar
 	templatesFlag        sliceVar
 	usersFlag            sliceVar
-	verboseFlag          bool
+    verboseFlag          bool
+    debugFlag            bool
 	versionFlag          bool
 	waitFlag             hostFlagsVar
 	waitTimeoutFlag      time.Duration
@@ -151,13 +152,23 @@ func main() {
 	flag.Var(&runsFlag, "run", "run (cmd [opts] [args] --) Can be passed multiple times")
 	flag.Var(&startsFlag, "start", "start (cmd [opts] [args] --) Can be passed multiple times")
 	flag.BoolVar(&reapFlag, "reap", false, "reap all child processes")
-	flag.BoolVar(&verboseFlag, "verbose", false, "verbose output")
+    flag.BoolVar(&verboseFlag, "verbose", false, "verbose output")
+    flag.BoolVar(&debugFlag, "debug", false, "debugging output")
 	flag.Var(&stdoutTailFlag, "stdout", "Tails a file to stdout. Can be passed multiple times")
 	flag.Var(&stderrTailFlag, "stderr", "Tails a file to stderr. Can be passed multiple times")
 	flag.StringVar(&delimsFlag, "delims", "", `template tag delimiters. default "{{":"}}" `)
 	flag.Var(&waitFlag, "wait", "Host (tcp/tcp4/tcp6/http/https) to wait for before this container starts. Can be passed multiple times. e.g. tcp://db:5432")
 	flag.DurationVar(&waitTimeoutFlag, "timeout", 10*time.Second, "Host wait timeout duration, defaults to 10s")
 	flag.DurationVar(&reapPollIntervalFlag, "reap-poll-interval", 120*time.Second, "Polling interval for reaping zombies")
+
+    // Manually pre-process the --debug flag so we can debug our removeCommandsFromOsArgs which happens BEFORE
+    // we call flag.Parse()
+    for i := 0; i < len(os.Args); i++ {
+        if os.Args[i] == "--debug" {
+            debugFlag = true
+            log.Printf("debugging output ..")
+        }
+    }
 
 	var commands = removeCommandsFromOsArgs()
 
@@ -189,6 +200,9 @@ func main() {
 
 	// Overlay files from src --> dst
 	for _, o := range overlaysFlag {
+        if debugFlag {
+            log.Printf("--overlay: %s", o)
+        }
 		if strings.Contains(o, ":") {
 			parts := strings.Split(o, ":")
 			if len(parts) != 2 {
@@ -259,7 +273,10 @@ func main() {
 			}
 		}, cmd, false /*cancel_when_finished*/)
 		wg.Wait()
-		log.Printf("ready for next cmd")
+        if exitCode != 0 {
+            cancel()
+            os.Exit(exitCode)
+        }
 	}
 
 	for _, logFile := range stdoutTailFlag {
