@@ -161,12 +161,14 @@ func main() {
 	flag.DurationVar(&waitTimeoutFlag, "timeout", 10*time.Second, "Host wait timeout duration, defaults to 10s")
 	flag.DurationVar(&reapPollIntervalFlag, "reap-poll-interval", 120*time.Second, "Polling interval for reaping zombies")
 
-    // Manually pre-process the --debug flag so we can debug our removeCommandsFromOsArgs which happens BEFORE
-    // we call flag.Parse()
+    // Manually pre-process the --debug and --verbose flags so we can debug our complex argument pre-processing
+    // that happens BEFORE flag.Parse()
     for i := 0; i < len(os.Args); i++ {
-        if os.Args[i] == "--debug" {
+        if strings.TrimSpace(os.Args[i]) == "--debug" {
             debugFlag = true
             log.Printf("debugging output ..")
+        } else if strings.TrimSpace(os.Args[i]) == "--verbose" {
+            verboseFlag = true
         }
     }
 

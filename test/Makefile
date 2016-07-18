@@ -264,3 +264,18 @@ run-exit-code-test:
 	@echo "run-exit-code-test PASSED"
 
 
+run-trim-args-test:
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+	@echo "\n\nrun-trim-args-test:"
+	@echo "\tVerify that dockerfy trims its own args, but not those to --run or --start cmds"
+	@echo "################################################################################"
+	docker run -it --name test-nginx \
+		-v $(PWD):/secrets  \
+		nginx-with-dockerfy-and-zombie-maker  \
+		' --debug ' \
+		' --secrets-files ' " /secrets/secrets.json:/secrets/secrets.2.json " \
+		--run echo '  LEADING SPACES   ' -- echo DONE >/dev/null 2>&1
+	docker logs test-nginx 2>&1 | egrep -q 'debugging output'
+	docker logs test-nginx 2>&1 | egrep -q '^  LEADING SPACES'
+	docker logs test-nginx 2>&1 | egrep -q 'loaded secret: JSON_SECRET'
+	@echo "run-trim-args-test PASSED"

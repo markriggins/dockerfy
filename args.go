@@ -95,7 +95,8 @@ func removeCommandsFromOsArgs() Commands {
 						cmd.Path, _ = exec.LookPath(cmd.Path)
 					}
 				}
-				cmd.Args = append(cmd.Args, arg_i)
+                // Only trim our own args, not --run cmd's or --start cmd's
+				cmd.Args = append(cmd.Args, os.Args[i])
 			} else {
 				newOsArgs = append(newOsArgs, arg_i)
 			}
