@@ -1,3 +1,4 @@
+![dockerfyme](https://github.com/markriggins/dockerfy/blob/master/dockerfyme.png)
 dockerfy -- Utility to initialize docker containers
 ===================================================
 **Dockerfy** is a utility program to initialize and control container applications, and also provide some
@@ -67,7 +68,7 @@ The above example will run the nginx program inside a docker container, but **be
 3. **Execute the nginx.conf.tmpl template**. This template uses the powerful go language templating features to substitute environment variables and secret settings directly into the nginx.conf file. (Which is handy since nginx doesn't read the environment itself.)  Every occurance of {{ .Env.**VARNAME** }} will be replaced with the value of $VARNAME, and every {{ .Secret.**VARNAME** }} will be replaced with the secret value of VARNAME.
 4. **Wait** for the http://{{ .Env.MYSQLSERVER }} server to start accepting requests on port {{ .Env.MYSQLPORT }} for up to 60 seconds
 5. **Run migrate_lock** a program to perform a Django/MySql database migration to update the database schema, and wait for it to finish. If **migrate_lock** fails, then dockerfy will exit with migrate_lock's exit code, and the primary command **nginx** will never start.
-6. **Start the cache-cleaner-daemon**, which will run in the background presumably cleaning up stale cache files while nginx runs.  If for any reason the cache-cleaner-daemon exits, then dockerfy will also exit with the cache-cleaner-daemon's exit code. 
+6. **Start the cache-cleaner-daemon**, which will run in the background presumably cleaning up stale cache files while nginx runs.  If for any reason the cache-cleaner-daemon exits, then dockerfy will also exit with the cache-cleaner-daemon's exit code.
 7. **Start Reaping Zombie processes** under a separate goroutine in case the cache-cleaner-deamon loses track of its child processes.
 8. **Run nginx** with its customized nginx.conf file and html as user `nobody`
 9. **Propagate Signals** to all processes, so the container can exit cleanly on SIGHUP or SIGINT
