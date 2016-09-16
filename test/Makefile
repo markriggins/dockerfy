@@ -3,8 +3,10 @@
 
 TAG:=`git describe --tags`
 
-build: .zombie-maker-debian-binary .mk.nginx-with-dockerfy-and-zombie-maker
+build: .mk.dockerfy .zombie-maker-debian-binary .mk.nginx-with-dockerfy-and-zombie-maker
 
+.mk.dockerfy:
+	cd .. && make dockerfy
 
 .mk.nginx-with-dockerfy-and-zombie-maker:
 	cd .. && make nginx-with-dockerfy
@@ -58,8 +60,13 @@ run-prod-secrets: stop
 
 test: build just-test
 
-just-test: start-tests run-zombie-test run-service-stops-too-soon-test run-primary-stops-while-service-is-running-test \
-		run-before-primary-test run-fails-before-primary-test run-primary-service-exits run-wait-test run-user-option-test run-option-expansion-test run-exit-code-test
+just-test: start-tests run-zombie-test \
+	run-service-stops-too-soon-test \
+	run-primary-stops-while-service-is-running-test \
+	run-before-primary-test run-fails-before-primary-test \
+	run-primary-service-exits run-wait-test \
+	run-user-option-test run-option-expansion-test \
+	run-exit-code-test run-template-funcs-test
 	@echo "\n\nALL TESTS PASSED"
 
 start-tests:
@@ -279,3 +286,13 @@ run-trim-args-test:
 	docker logs test-nginx 2>&1 | egrep -q '^  LEADING SPACES'
 	docker logs test-nginx 2>&1 | egrep -q 'loaded secret: JSON_SECRET'
 	@echo "run-trim-args-test PASSED"
+
+run-template-funcs-test:
+	@echo "\n\nrun-template-funcs-test:"
+	@echo "\tVerify that dockerfy template functions work"
+	@echo "################################################################################"
+	@echo "\tgetenv and concat"
+	@dockerfy -- echo '{{  concat "P" "WD" | getenv }}' | egrep -q "^$(PWD)$$"
+	@echo "\tN"
+	@N=20 dockerfy -- echo '{{$$n := getenv "N" | atoi}}{{range $$i, $$_ := N $$n}}{{$$i}}{{end}}' | egrep  -q '^012345678910111213141516171819$$'
+	@echo "run-template-funcs-test PASSED"

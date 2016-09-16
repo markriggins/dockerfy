@@ -151,7 +151,7 @@ func main() {
 	flag.Var(&secretsFilesFlag, "secrets-files", "secrets files (path to secrets.env files). Colon-separated list")
 	flag.Var(&runsFlag, "run", "run (cmd [opts] [args] --) Can be passed multiple times")
 	flag.Var(&startsFlag, "start", "start (cmd [opts] [args] --) Can be passed multiple times")
-	flag.BoolVar(&reapFlag, "reap", false, "reap all child processes")
+	flag.BoolVar(&reapFlag, "reap", false, "reap all zombie processes")
     flag.BoolVar(&verboseFlag, "verbose", false, "verbose output")
     flag.BoolVar(&debugFlag, "debug", false, "debugging output")
 	flag.Var(&stdoutTailFlag, "stdout", "Tails a file to stdout. Can be passed multiple times")

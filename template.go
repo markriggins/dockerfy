@@ -26,11 +26,19 @@ func GetEnvMap() map[string]string {
     return env
 }
 
+//
+// getenv template function
+//
+// '{{concat "P" "WD" | getenv}}' will print $PWD
+//
 func GetEnv(v string) string {
     return GetEnvMap()[v]
 }
 
-func (c *TemplateContext) GetEnvMap() map[string]string {
+//
+// .Env.VAR lookup from template context
+//
+func (c *TemplateContext) Env() map[string]string {
 	if c.env != nil {
 		return c.env
 	}
@@ -192,3 +200,4 @@ func generateFile(templatePath, destPath string) bool {
 
 	return true
 }
+
