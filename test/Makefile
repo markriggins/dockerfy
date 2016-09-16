@@ -292,7 +292,7 @@ run-template-funcs-test:
 	@echo "\tVerify that dockerfy template functions work"
 	@echo "################################################################################"
 	@echo "\tgetenv and concat"
-	@dockerfy -- echo '{{  concat "P" "WD" | getenv }}' | egrep -q "^$(PWD)$$"
+	@dockerfy -- echo '{{ concat "P" "W" "D" | getenv }}' | egrep -q "^$(PWD)$$"
 	@echo "\tN"
-	@N=20 dockerfy -- echo '{{$$n := getenv "N" | atoi}}{{range $$i, $$_ := N $$n}}{{$$i}}{{end}}' | egrep  -q '^012345678910111213141516171819$$'
+	N=20 dockerfy -- echo '{{ $$N := getenv "N"}}{{range $$i, $$v := sequence "0" $$N}}{{$$v}}{{end}}' | egrep  -q '^012345678910111213141516171819$$'
 	@echo "run-template-funcs-test PASSED"

@@ -113,14 +113,28 @@ func add(arg1, arg2 int) int {
 	return arg1 + arg2
 }
 
-func concat(arg1, arg2 string) string {
-    return arg1 + arg2
+func concat(args ...string) (s string) {
+    s = ""
+    for _, v := range args {
+        s = s + v
+    }
+    return
 }
 
+func sequence(firstS, lastS string) []string {
+    // return a sequence of strings from first (inclusive) to last (exlusive)
+    // N(3,5) returns ["3", "4"]
+    first, _ := strconv.Atoi(firstS)
+    last, _ := strconv.Atoi(lastS)
 
-func N(n int) []struct{} {
-    // from https://github.com/bradfitz/iter/blob/master/iter.go
-    return make([]struct{}, n)
+    if last < first {
+        last, first = 0, 0
+    }
+    sequence := make([]string, (last - first))
+    for i := first; i < last; i++ {
+        sequence[i] = strconv.Itoa(i)
+    }
+    return sequence
 }
 
 var funcMap = template.FuncMap{
@@ -133,7 +147,8 @@ var funcMap = template.FuncMap{
         "atoi":     strconv.Atoi,
         "add":      add,
         "concat":   concat,
-        "N":        N,
+        "sequence": sequence,
+        "N":        sequence,
         "getenv":   GetEnv,
     }
 //
