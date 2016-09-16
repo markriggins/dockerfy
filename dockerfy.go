@@ -334,6 +334,8 @@ func main() {
 			}
 			cancel()
 		}, primary_command, true /*cancel_when_finished*/)
+
+        //TODO -- catch signals and log the fact that dockerfy itself was terminated
 	} else {
 		cancel()
 	}

@@ -17,16 +17,24 @@ type TemplateContext struct {
 	env, secrets map[string]string
 }
 
-func (c *TemplateContext) Env() map[string]string {
+func GetEnvMap() map[string]string {
+    env := make(map[string]string)
+    for _, i := range os.Environ() {
+        sep := strings.Index(i, "=")
+        env[i[0:sep]] = i[sep+1:]
+    }
+    return env
+}
+
+func GetEnv(v string) string {
+    return GetEnvMap()[v]
+}
+
+func (c *TemplateContext) GetEnvMap() map[string]string {
 	if c.env != nil {
 		return c.env
 	}
-	c.env = make(map[string]string)
-
-	for _, i := range os.Environ() {
-		sep := strings.Index(i, "=")
-		c.env[i[0:sep]] = i[sep+1:]
-	}
+	c.env = GetEnvMap()
 	return c.env
 }
 
@@ -97,13 +105,37 @@ func add(arg1, arg2 int) int {
 	return arg1 + arg2
 }
 
+func concat(arg1, arg2 string) string {
+    return arg1 + arg2
+}
+
+
+func N(n int) []struct{} {
+    // from https://github.com/bradfitz/iter/blob/master/iter.go
+    return make([]struct{}, n)
+}
+
+var funcMap = template.FuncMap{
+        "contains": contains,
+        "exists":   exists,
+        "split":    strings.Split,
+        "replace":  strings.Replace,
+        "default":  defaultValue,
+        "parseUrl": parseUrl,
+        "atoi":     strconv.Atoi,
+        "add":      add,
+        "concat":   concat,
+        "N":        N,
+        "getenv":   GetEnv,
+    }
 //
 // Execute the string_template under the TemplateContext, and
 // return the result as a string
 //
 func string_template_eval(string_template string) string {
 	var result bytes.Buffer
-	t := template.New("String Template")
+    t := template.New("String Template").Funcs(funcMap)
+
 
 	t, err := t.Parse(string_template)
 	if err != nil {
@@ -122,16 +154,7 @@ func string_template_eval(string_template string) string {
 // Execute the template at templatePath under the TemplateContext and write it to destPath
 //
 func generateFile(templatePath, destPath string) bool {
-	tmpl := template.New(filepath.Base(templatePath)).Funcs(template.FuncMap{
-		"contains": contains,
-		"exists":   exists,
-		"split":    strings.Split,
-		"replace":  strings.Replace,
-		"default":  defaultValue,
-		"parseUrl": parseUrl,
-		"atoi":     strconv.Atoi,
-		"add":      add,
-	})
+	tmpl := template.New(filepath.Base(templatePath)).Funcs(funcMap)
 
 	if len(delims) > 0 {
 		tmpl = tmpl.Delims(delims[0], delims[1])
