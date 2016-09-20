@@ -330,12 +330,7 @@ But of course, use the latest release!
 
 
 ##Inspiration and Open Source Usage
-Dockerfy is based on the work of others, relying heavily on jwilder's wait, and log tailer, [ dockerize](https://github.com/jwilder/dockerize) and  miekg's  dinit ](https://github.com/miekg/dinit) a small init-like "daemon", and other tips on stackoverflow and other places of public commentary about docker.
-
-The secrets injection, overlays, and commands that run before the primary command starts and the command-line syntax for running commands and starting services are unique to **dockerfy**.
-
-See:
-[A Simple Way To Dockerize Applications](http://jasonwilder.com/blog/2014/10/13/a-simple-way-to-dockerize-applications/)
+Dockerfy is based on the work of others, relying heavily on jwilder's `dockerize` program for how to wait for processes to finish, and how to tail log files ( [ see jwilder/dockerize](https://github.com/jwilder/dockerize) and [A Simple Way To Dockerize Applications](http://jasonwilder.com/blog/2014/10/13/a-simple-way-to-dockerize-applications/) ), but `dockerfy` expands the features of GoLanguage templates and adds many new features such as secrets injection, overlays, and commands that run before the primary command starts and the command-line syntax for specifying arguments to the commands that should start or run
 
 
 TODO:
