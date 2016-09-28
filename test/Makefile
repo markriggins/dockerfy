@@ -293,6 +293,9 @@ run-template-funcs-test:
 	@echo "################################################################################"
 	@echo "\tgetenv and concat"
 	@dockerfy -- echo '{{ concat "P" "W" "D" | getenv }}' | egrep -q "^$(PWD)$$"
-	@echo "\tN"
-	N=20 dockerfy -- echo '{{ $$N := getenv "N"}}{{range $$i, $$v := sequence "0" $$N}}{{$$v}}{{end}}' | egrep  -q '^012345678910111213141516171819$$'
+	@echo "\tsequence"
+	@N=20 dockerfy -- echo '{{ $$N := getenv "N"}}{{range $$i, $$v := sequence "1" $$N}}{{$$v}},{{end}}' \
+		| egrep -q '^1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,$$'
+	@echo "\tsplit"
+	@dockerfy -- echo '{{range $$i, $$v := split "a,b,c" ","}}{{$$v}}__{{end}}' | egrep  -q '^a__b__c__$$'
 	@echo "run-template-funcs-test PASSED"
