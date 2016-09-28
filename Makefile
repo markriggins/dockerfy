@@ -1,8 +1,8 @@
 .PHONY : dockerfy dist-clean dist release zombie-maker
 
-TAG:=`git describe --tags`
-YTAG:=`git describe --tags | cut -d. -f1,2`
-XTAG:=`git describe --tags | cut -d. -f1`
+TAG  := $(shell git describe --tags)
+YTAG := $(shell git describe --tags | cut -d. -f1,2)
+XTAG := $(shell git describe --tags | cut -d. -f1)
 LDFLAGS:=-X main.buildVersion=$(TAG)
 DOLLAR='$'
 
@@ -10,7 +10,7 @@ all: dockerfy nginx-with-dockerfy
 
 dockerfy: deps
 	echo "Building dockerfy"
-	go install -ldflags "$(LDFLAGS)"
+	go install -ldflags '$(LDFLAGS)'
 
 debug: deps
 	godebug run  $(ls *.go | egrep -v unix)
