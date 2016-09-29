@@ -122,17 +122,18 @@ func concat(args ...string) (s string) {
 }
 
 func sequence(firstS, lastS string) []string {
-    // return a sequence of strings from first (inclusive) to last (exlusive)
-    // N(3,5) returns ["3", "4"]
+    // return a sequence of strings from first to last (inclusive)
+    // `sequence 3 5` returns ["3", "4", "5"]
     first, _ := strconv.Atoi(firstS)
     last, _ := strconv.Atoi(lastS)
 
     if last < first {
         last, first = 0, 0
     }
-    sequence := make([]string, (last - first))
-    for i := first; i < last; i++ {
-        sequence[i] = strconv.Itoa(i)
+    sequence := make([]string, (last - first + 1))
+
+    for i := 0; i + first <= last; i++ {
+        sequence[i] = strconv.Itoa(i + first)
     }
     return sequence
 }

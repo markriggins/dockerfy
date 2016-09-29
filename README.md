@@ -4,6 +4,7 @@ dockerfy -- Utility to initialize docker containers
 **Dockerfy** is a utility program to initialize and control container applications, and also provide some
 missing OS functionality (such as an init process, and reaping zombies etc.)
 
+
 ##Key Features
 
 1. Overlays of alternative content at runtime
@@ -16,7 +17,10 @@ missing OS functionality (such as an init process, and reaping zombies etc.)
 8. Starting Services -- and shutting down the container if they fail
 9. Propagating signals to child processes
 10. Reaping Zombie (defunct) processes
-11. Running services and commands under various user accounts
+11. Running services and commands under various user accounts 
+
+This small program packs in a lot of features, and can be added to almost any Docker image to make it easy to pre-initialize the container at runtime. 
+Pre-built binaries are available on our [Releases](https://github.com/SocialCodeInc/dockerfy/releases) page. 
 
 
 ## Dockerfile Example
@@ -194,7 +198,7 @@ In the above example, all occurances of the string  {{ .Env.PROXY_PASS_URL }} wi
 Note: $host and $remote_addr are Nginx variable that are set on a per-request basis NOT from the environment.
 
 ##### Advanced Templates
-But go's templates offer advanced features such as if-statements and comments.
+But go's templates offer advanced features such as if-statements and comments.  The example below will add a `location /` block to setup proxy_pass only if the environment variable $PROXY_PASS_URL is set.
 
 	server {
     {{/* only set up proxy_pass if PROXY_PASS_URL is set in the environment */}}
@@ -217,7 +221,7 @@ But go's templates offer advanced features such as if-statements and comments.
 
 If your source language uses {{ }} for some other purpose, you can avoid the conflict by using the `--delims` option to specify alternative delimiters such as "<%:%>"
 
-##### Built-in Functions
+##### Built-in Template Functions
 There are a few built in functions as well:
 
   * `default $var $default` - Returns a default value for one that does not exist. `{{ default .Env.VERSION "0.1.2" }}`
@@ -228,6 +232,54 @@ There are a few built in functions as well:
   * `parseUrl $url` - Parses a URL into it's [protocol, scheme, host, etc. parts][go.url.URL]. Alias for [`url.Parse`][go.url.Parse]
   * `atoi $value` - Parses a string $value into an int. `{{ if (gt (atoi .Env.NUM_THREADS) 1) }}`
   * `add $arg1 $arg` - Performs integer addition. `{{ add (atoi .Env.SHARD_NUM) -1 }}`
+  * `sequence "2" "5"` - Returns an array with the values from first to last.  In this case, [ "2", "3", "4", "5"], that can serve as the basis for iteration.
+  * `contact "ab" "c" "d"` - Returns the concatonation of its arguments "abcd".
+  * `getenv "VAR1"` - Returns the value of the environment variable $VAR1
+  
+##### Template Iteration
+Golang templates offer a unique method of iteration that is somewhat obtuse to say the least, so a worked example may be best to show you how it works.
+
+    example.tmpl:
+        {{range $i, $v := sequence "5" "8"}}
+            the value of sequence[{{$i}}] is {{$v}}
+        {{end}}  
+
+The above template uses the `sequence` function to create a list of numbers ["5", "6", "7", "8"] to be used at the argument for the GoLang template `range` function. Everything between the `{{range ..}}` and `{{end}}` will be evaluated `once per sequence value`, expanding the template to :
+
+     the value of sequence[0] is 5
+     the value of sequence[1] is 6
+     the value of sequence[2] is 7
+     the value of sequence[3] is 8
+
+Combining `range` with `split` can be used to print `0=a 1=b 2=c`
+
+     {{range $i, $v := split "a,b,c" ","}}
+       {{$i}}={{$v}}
+     {{end}}
+
+Combining this with `getenv` command allows us control the iteration by environment variables to print the numbers 1 to $HOW_MANY
+
+     env-example.tmpl:
+         {{ $how_many := getenv "HOW_MANY"}}
+         {{range $i, $v := sequence "1" $how_many}}
+           {{$v}}
+         {{end}}
+      
+Note, GoLang tempaltes also support piping, which you can use pass the name of an environment variable to `getenv` so variable names can be made on the fly, which you could use to read some environment variables named $V_1, $V_2,...
+
+    {{range $i, $v := sequence "1" "3"}}
+        {{ $val := printf "V_%s" $v | getenv }}
+        environment variable V_{{$v}} == "{{$val}}"
+    {{end}}
+ 
+To produce the follow, (assuming that the enviroment variables have been exported with values "one", "two", and "three"
+
+    environment variable V_1 == "one"
+    environment variable V_2 == "two"
+    environment variable V_3 == "three"
+
+Which might come in handy for setting up nginx downstream servers, or whatever you might need.  Go crazy, but try not to hurt yourself. :)
+
 
 ##### Secrets in Templates
 If you're running in development mode and mounting -v $PWD:/app in your docker container, we recommend:
@@ -317,7 +369,7 @@ If `inotify` does not work in you container, you use `--log-poll` to poll for fi
 ## Installation
 
 Download the latest version in your container:
-[releases](https://github.com/markriggins/dockerfy/releases)
+[releases](https://github.com/SocialCodeInc/dockerfy/releases)
 
 For Linux Amd64 Systems:
 
