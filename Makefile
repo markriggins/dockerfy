@@ -88,4 +88,7 @@ push:
 test: fmt lint nginx-with-dockerfy
 	cd test && make test
 
+test-and-log: fmt lint nginx-with-dockerfy
+	cd test && make test-and-log
+
 .PHONY: test
