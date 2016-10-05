@@ -31,7 +31,7 @@ lint:
 	@echo
 
 
-dockerfy: prereqs
+dockerfy: prereqs *.go
 	echo "Building dockerfy"
 	go build -ldflags '$(LDFLAGS)'
 
@@ -45,11 +45,11 @@ dist-clean:
 	rm -f dockerfy-linux-*.tar.gz
 
 
-dist: dist-clean prereqs dist/linux/amd64/dockerfy nginx-with-dockerfy
+dist: dist-clean dist/linux/amd64/dockerfy nginx-with-dockerfy
 
 
 # NOTE: this target is built by the above ^^ amd64 make inside a golang docker container
-dist/linux/amd64/dockerfy: Makefile *.go
+dist/linux/amd64/dockerfy: prereqs Makefile *.go
 	mkdir -p dist/linux/amd64
 	@# a native build allows user.Lookup to work.  Not sure why it doesn't if we cross-compile
 	@# from OSX
