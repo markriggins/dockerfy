@@ -64,3 +64,8 @@ float-tags: nginx-with-dockerfy
 
 push:
 	docker push markriggins/nginx-with-dockerfy
+
+test:
+	cd test && make test
+
+.PHONY: test

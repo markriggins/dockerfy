@@ -201,10 +201,11 @@ run-wait-timeout-test:
 	docker run -it --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose \
 	    --timeout 2s \
 		--wait http://amazon.com:81 \
-		echo DONE || true
+		echo DONE && exit 1 || true
 	docker logs test-nginx 2>&1 | egrep -q 'Waiting for host: http://amazon.com:81'
+	docker logs test-nginx 2>&1 | egrep -q 'Timeout after 2s waiting.*amazon'
 	docker logs test-nginx 2>&1 | egrep -q '^DONE' && exit 1 || true
-	@echo "run-wait-test PASSED"
+	@echo "run-wait-timeout-test PASSED"
 
 run-user-option-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
