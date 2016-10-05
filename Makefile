@@ -8,17 +8,36 @@ DOLLAR='$'
 
 all: dockerfy nginx-with-dockerfy
 
-dockerfy: deps
+
+prereqs:
+	glide --no-color install -u -s -v
+
+
+fmt:
+	@echo gofmt:
+	@test -z `glide novendor -x | sed '$$d' | xargs gofmt -l | tee /dev/stderr` && echo passed
+	@echo
+
+
+lint:
+	@{ \
+		if [ -z `which golint` ]; then \
+			echo "golint not found in path. Available from: github.com/golang/lint/golint" ;\
+			exit 1 ;\
+		fi ;\
+	}
+	@echo golint:
+	@glide novendor | xargs -n1 golint
+	@echo
+
+
+dockerfy: prereqs
 	echo "Building dockerfy"
-	go install -ldflags '$(LDFLAGS)'
+	go build -ldflags '$(LDFLAGS)'
 
-debug: deps
+
+debug: prereqs
 	godebug run  $(ls *.go | egrep -v unix)
-
-deps:
-	go get github.com/hpcloud/tail
-	go get golang.org/x/net/context
-	go get golang.org/x/sys/unix
 
 
 dist-clean:
@@ -26,20 +45,19 @@ dist-clean:
 	rm -f dockerfy-linux-*.tar.gz
 
 
-dist: dist-clean deps build-dist-dockerfy-in-container nginx-with-dockerfy
+dist: dist-clean prereqs dist/linux/amd64/dockerfy nginx-with-dockerfy
 
-build-dist-dockerfy-in-container:
+
+# NOTE: this target is built by the above ^^ amd64 make inside a golang docker container
+dist/linux/amd64/dockerfy: Makefile *.go
 	mkdir -p dist/linux/amd64
 	@# a native build allows user.Lookup to work.  Not sure why it doesn't if we cross-compile
 	@# from OSX
-	docker run --rm -it -e GOPATH=/tmp/go \
-	  --volume $$PWD:/src/dockerfy  \
-	  --workdir /src/dockerfy \
-	  golang:1.6 make dist/linux/amd64/dockerfy
-
-# NOTE: this target is built by the above ^^ amd64 make inside an golang:1.6 docker container
-dist/linux/amd64/dockerfy: deps Makefile
-	go build -ldflags "$(LDFLAGS)" -o dist/linux/amd64/dockerfy
+	docker run --rm -it  \
+	  --volume $$PWD/vendor:/go/src  \
+	  --volume $$PWD:/go/src/dockerfy \
+	  --workdir /go/src/dockerfy \
+	  golang:1.7 go build -ldflags "$(LDFLAGS)" -o dist/linux/amd64/dockerfy
 
 
 release: dist
@@ -48,9 +66,11 @@ release: dist
 	@#tar -czf dist/release/dockerfy-linux-armel-$(TAG).tar.gz -C dist/linux/armel dockerfy
 	@#tar -czf dist/release/dockerfy-linux-armhf-$(TAG).tar.gz -C dist/linux/armhf dockerfy
 
-nginx-with-dockerfy: dist/.mk.nginx-with-dockerfy
 
-dist/.mk.nginx-with-dockerfy: Makefile
+nginx-with-dockerfy:  dist/.mk.nginx-with-dockerfy
+
+
+dist/.mk.nginx-with-dockerfy: Makefile dist/linux/amd64/dockerfy Dockerfile.nginx-with-dockerfy
 	docker build -t markriggins/nginx-with-dockerfy:$(TAG) --file Dockerfile.nginx-with-dockerfy .
 	docker tag markriggins/nginx-with-dockerfy:$(TAG) nginx-with-dockerfy
 	touch dist/.mk.nginx-with-dockerfy
@@ -65,7 +85,7 @@ float-tags: nginx-with-dockerfy
 push:
 	docker push markriggins/nginx-with-dockerfy
 
-test:
+test: fmt lint nginx-with-dockerfy
 	cd test && make test
 
 .PHONY: test

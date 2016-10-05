@@ -128,7 +128,7 @@ Arguments:
 
        dockerfy --start /bin/sleep 5 -- /bin/service
 	     `)
-	println(`For more information, see https://github.com/markriggins/dockerfy`)
+	println(`For more information, see https://github.com/markriggins/dockerfy `)
 }
 
 func main() {

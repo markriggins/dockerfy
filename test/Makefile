@@ -3,20 +3,24 @@
 
 TAG:=`git describe --tags`
 
-build: .mk.dockerfy .zombie-maker-debian-binary .mk.nginx-with-dockerfy-and-zombie-maker
+build: ../dockerfy .mk.nginx-with-dockerfy-and-zombie-maker
 
-.mk.dockerfy:
+clean:
+	rm -f .mk* .zombie-maker-debian-binary
+
+
+../dockerfy:
 	cd .. && make dockerfy
 
-.mk.nginx-with-dockerfy-and-zombie-maker:
+
+.mk.nginx-with-dockerfy-and-zombie-maker: Dockerfile.nginx-with-dockerfy-and-zombie-maker .zombie-maker-debian-binary
 	cd .. && make nginx-with-dockerfy
-	docker build -t  nginx-with-dockerfy-and-zombie-maker .
+	docker build --file Dockerfile.nginx-with-dockerfy-and-zombie-maker -t  nginx-with-dockerfy-and-zombie-maker .
 
 
 .zombie-maker-debian-binary: zombie-maker.c
-	# build a native and debian binary
+	# build a debian binary that can run in an nginx container
 	docker run --rm -v "$(PWD)":/tmp -w /tmp gcc gcc -o .zombie-maker-debian-binary zombie-maker.c
-	# gcc -o zombie-maker zombie-maker.c
 
 
 stop:
@@ -33,6 +37,7 @@ run-staging: stop
 	open http://$(shell docker-machine ip $(shell docker-machine active))/robots.txt
 	open http://$(shell docker-machine ip $(shell docker-machine active))
 
+
 run-prod: stop
 	docker run -d -p 80:80 -e DEPLOYMENT_ENV=prod --name test-nginx nginx-with-dockerfy-and-zombie-maker \
 		     --overlay /tmp/overlays/_common/html:/usr/share/nginx/ \
@@ -40,9 +45,11 @@ run-prod: stop
 	         -- nginx -g "daemon off;"
 	open http://$(shell docker-machine ip $(shell docker-machine active))/robots.txt
 
+
 run-proxy-amazon: stop
 	docker run -d -p 80:80 -e PROXY_PASS_URL="https://www.amazon.com/" --name test-nginx nginx-with-dockerfy-and-zombie-maker
 	open http://$(shell docker-machine ip $(shell docker-machine active))
+
 
 run-prod-secrets: stop
 	docker run -d -p 80:80 -e DEPLOYMENT_ENV=prod --name test-nginx \
@@ -60,6 +67,7 @@ run-prod-secrets: stop
 
 test: build just-test
 
+
 just-test: start-tests run-zombie-test \
 	run-service-stops-too-soon-test \
 	run-primary-stops-while-service-is-running-test \
@@ -69,9 +77,11 @@ just-test: start-tests run-zombie-test \
 	run-exit-code-test run-template-funcs-test
 	@echo "\n\nALL TESTS PASSED"
 
+
 start-tests:
 	@echo "\nRunning all tests"
 	@echo "################################################################################"
+
 
 run-zombie-test:
 	@echo "\n\nRunning Zombie Test -- expect 10 zombies to get reaped"
@@ -166,6 +176,7 @@ run-fails-before-primary-test:
 
 	@echo "run-before-primary-test PASSED"
 
+
 run-primary-service-exits:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
@@ -192,6 +203,7 @@ run-wait-test:
 	docker logs test-nginx 2>&1 | egrep -q '^DONE'
 	@echo "run-wait-test PASSED"
 
+
 run-wait-timeout-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
@@ -206,6 +218,7 @@ run-wait-timeout-test:
 	docker logs test-nginx 2>&1 | egrep -q 'Timeout after 2s waiting.*amazon'
 	docker logs test-nginx 2>&1 | egrep -q '^DONE' && exit 1 || true
 	@echo "run-wait-timeout-test PASSED"
+
 
 run-user-option-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
@@ -241,6 +254,7 @@ run-user-option-test:
 	[ $$(docker logs test-nginx 2>/dev/null| fgrep -- 'uid=0(root) gid=0(root) groups=0(root)' | wc -l) == 2 ]
 	# '
 	@echo "run-user-option-test PASSED"
+
 
 run-option-expansion-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
@@ -301,6 +315,7 @@ run-trim-args-test:
 	docker logs test-nginx 2>&1 | egrep -q '^  LEADING SPACES'
 	docker logs test-nginx 2>&1 | egrep -q 'loaded secret: JSON_SECRET'
 	@echo "run-trim-args-test PASSED"
+
 
 run-template-funcs-test:
 	@echo "\n\nrun-template-funcs-test:"

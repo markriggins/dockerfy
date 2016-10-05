@@ -1,0 +1,27 @@
+hash: b3ee1b2fbddde827859f48dbe566d88657d373bad19cd0290ad4483f88ddf04e
+updated: 2016-10-05T09:13:41.371137555-04:00
+imports:
+- name: github.com/golang/lint
+  version: 55ae771cfa82f3846897c972e262ed5d54d47d48
+  subpackages:
+  - golint
+- name: github.com/hpcloud/tail
+  version: a30252cb686a21eb2d0b98132633053ec2f7f1e5
+  subpackages:
+  - ratelimiter
+  - util
+  - watch
+  - winfile
+- name: golang.org/x/net
+  version: ffe101cce3477a6c6d8f0754d103bb0a84ec1266
+  subpackages:
+  - context
+- name: golang.org/x/sys
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
+  subpackages:
+  - unix
+- name: gopkg.in/fsnotify.v1
+  version: 7be54206639f256967dd82fa767397ba5f8f48f5
+- name: gopkg.in/tomb.v1
+  version: c131134a1947e9afd9cecfe11f4c6dff0732ae58
+devImports: []

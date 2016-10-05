@@ -1,0 +1,9 @@
+package: github.com/SocialCodeInc/dockerfy
+import:
+- package: github.com/hpcloud/tail
+- package: golang.org/x/net
+  subpackages:
+  - context
+- package: golang.org/x/sys
+  subpackages:
+  - unix
