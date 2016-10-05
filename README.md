@@ -25,7 +25,7 @@ Pre-built binaries are available on our [Releases](https://github.com/SocialCode
 
 ## Dockerfile Example
 
-    FROM markriggins/nginx-with-dockerfy
+    FROM socialcode/nginx-with-dockerfy
 
     ENTRYPOINT [ "dockerfy",                                                                            \
                     "--secrets-files", "/secrets/secrets.env",                                          \
@@ -41,7 +41,7 @@ Pre-built binaries are available on our [Releases](https://github.com/SocialCode
 ## equivalent docker-compose.yml Example
 
     nginx:
-      image: markriggins/nginx-with-dockerfy
+      image: socialcode/nginx-with-dockerfy
 
       volumes:
         - /secrets:/secrets
@@ -306,7 +306,7 @@ If you're running in locally development mode and mounting the current directory
 		$ echo "PASSWORD='top secret'" > ~/.secrets/my-application--staging.env
 		$ chmod 600 ~/.secrets/*
 
-		$ docker run -v $HOME/.secrets:/secrets --entrypoint dockerfy markriggins/nginx-with-dockerfy \
+		$ docker run -v $HOME/.secrets:/secrets --entrypoint dockerfy socialcode/nginx-with-dockerfy \
 		    --secrets-files /secrets/my-application--staging.env -- echo 'The password is "{{.Secret.PASSWORD}}"'
 
 Will print `The password is "top secret"`

@@ -71,19 +71,19 @@ nginx-with-dockerfy:  dist/.mk.nginx-with-dockerfy
 
 
 dist/.mk.nginx-with-dockerfy: Makefile dist/linux/amd64/dockerfy Dockerfile.nginx-with-dockerfy
-	docker build -t markriggins/nginx-with-dockerfy:$(TAG) --file Dockerfile.nginx-with-dockerfy .
-	docker tag markriggins/nginx-with-dockerfy:$(TAG) nginx-with-dockerfy
+	docker build -t socialcode/nginx-with-dockerfy:$(TAG) --file Dockerfile.nginx-with-dockerfy .
+	docker tag socialcode/nginx-with-dockerfy:$(TAG) nginx-with-dockerfy
 	touch dist/.mk.nginx-with-dockerfy
 
 
 float-tags: nginx-with-dockerfy
 	# fail if we're not on a pure Z tag
 	git describe --tags | egrep -q '^[0-9\.]+$$'
-	docker tag markriggins/nginx-with-dockerfy:$(TAG) markriggins/nginx-with-dockerfy:$(YTAG)
-	docker tag markriggins/nginx-with-dockerfy:$(TAG) markriggins/nginx-with-dockerfy:$(XTAG)
+	docker tag socialcode/nginx-with-dockerfy:$(TAG) socialcode/nginx-with-dockerfy:$(YTAG)
+	docker tag socialcode/nginx-with-dockerfy:$(TAG) socialcode/nginx-with-dockerfy:$(XTAG)
 
 push:
-	docker push markriggins/nginx-with-dockerfy
+	docker push socialcode/nginx-with-dockerfy
 
 test: fmt lint nginx-with-dockerfy
 	cd test && make test

@@ -1,4 +1,4 @@
-FROM markriggins/nginx-with-dockerfy
+FROM socialcode/nginx-with-dockerfy
 
 COPY default.conf.tmpl /etc/nginx/conf.d/default.conf.tmpl
 
