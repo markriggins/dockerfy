@@ -1,16 +1,21 @@
 .PHONY : dockerfy dist-clean dist release zombie-maker
 
-TAG  := $(shell git describe --tags)
-YTAG := $(shell git describe --tags | cut -d. -f1,2)
-XTAG := $(shell git describe --tags | cut -d. -f1)
+TAG  := $(shell git describe --tags --match '[0-9]*\.[0-9]*')
+YTAG := $(shell echo $(TAG) | cut -d. -f1,2)
+XTAG := $(shell echo $(TAG) | cut -d. -f1)
 LDFLAGS:=-X main.buildVersion=$(TAG)
 DOLLAR='$'
+export SHELL = /bin/bash
 
 all: dockerfy nginx-with-dockerfy
 
 
-prereqs:
+prereqs: .mk.glide
+
+
+.mk.glide: glide.yaml
 	glide --no-color install -u -s -v
+	touch .mk.glide
 
 
 fmt:
@@ -30,6 +35,14 @@ lint:
 	@glide novendor | xargs -n1 golint
 	@echo
 
+is-open-source-clean:
+	@{ \
+		if glide -q list 2>/dev/null | egrep -iq 'github.com/SocialCodeInc'; then \
+			echo "Dockerfy is OPEN SOURCE -- no dependencies on SocialCodeInc sources are allowed"; \
+		else \
+			echo "Dockerfy is clean for OPEN SOURCE"; \
+		fi; \
+	}
 
 dockerfy: prereqs *.go
 	echo "Building dockerfy"
@@ -82,10 +95,12 @@ float-tags: nginx-with-dockerfy
 	docker tag socialcode/nginx-with-dockerfy:$(TAG) socialcode/nginx-with-dockerfy:$(YTAG)
 	docker tag socialcode/nginx-with-dockerfy:$(TAG) socialcode/nginx-with-dockerfy:$(XTAG)
 
-push:
+push: float-tags
+	docker images | grep nginx-with-dockerfy
+	# pushing the entire repository will push all tagged images
 	docker push socialcode/nginx-with-dockerfy
 
-test: fmt lint nginx-with-dockerfy
+test: fmt lint is-open-source-clean nginx-with-dockerfy
 	cd test && make test
 
 test-and-log: fmt lint nginx-with-dockerfy

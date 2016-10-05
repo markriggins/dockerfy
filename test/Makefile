@@ -70,7 +70,7 @@ run-prod-secrets: stop
 test: build
 	@{ \
 		if ! make just-test; then \
-			echo "DOCKER LOGS FROM FAILED TEST:"; \
+			echo "DOCKER LOGS FROM LAST text-nginx CONTAINER:"; \
 			docker logs test-nginx 2>&1; \
 			exit 1; \
 		fi; \
@@ -84,31 +84,31 @@ just-test: start-tests run-zombie-test \
 	run-primary-service-exits run-wait-test \
 	run-user-option-test run-option-expansion-test \
 	run-exit-code-test run-template-funcs-test
-	@echo "\n\nALL TESTS PASSED"
+	@echo -e "\n\nALL TESTS PASSED"
 
 
 start-tests:
-	@echo "\nRunning all tests"
+	@echo -e "\nRunning all tests"
 	@echo "################################################################################"
 
 
 run-zombie-test:
-	@echo "\n\nRunning Zombie Test -- expect 10 zombies to get reaped"
+	@echo -e "\n\nRunning Zombie Test -- expect 10 zombies to get reaped"
 	@echo "################################################################################"
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
-	@echo "\nRun zombie-maker inside test-nginx"
+	@echo -e "\nRun zombie-maker inside test-nginx"
 	@echo "--------------------------------------------------------------------------"
 	docker run --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose --reap --reap-poll-interval 2s \
 		--run zombie-maker 10 1 -- \
 		--run sleep 3 -- \
 		--run ps -ef -- \
 		sleep 10 >/dev/null 2>&1
-	@echo "\nLooking for <defunct> processes found by the above 'ps -ef'"
+	@echo -e "\nLooking for <defunct> processes found by the above 'ps -ef'"
 	@echo "--------------------------------------------------------------------------"
 	[ `docker logs test-nginx 2>&1 | egrep defunct | wc -l` == 10 ]
 
-	@echo "\nMake sure all 10 zombies got reaped"
+	@echo -e "\nMake sure all 10 zombies got reaped"
 	@echo "--------------------------------------------------------------------------"
 	@docker logs test-nginx 2>&1| egrep -q 'Reaped 10 zombies' || (echo FAILED TO REAP; exit 1)
 
@@ -117,11 +117,12 @@ run-zombie-test:
 
 
 run-service-stops-too-soon-test:
-	@echo "\n\nRunning 'run-service-stops-too-soon-test'"
-	@echo "\tWhen the service exits, the primary command should also stop"
+	@echo -e "\n\nRunning 'run-service-stops-too-soon-test'"
+	@echo -e "\tWhen the service exits, the primary command should also stop"
 	@echo "################################################################################"
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
+	#docker run --rm --entrypoint bash nginx-with-dockerfy-and-zombie-maker -c 'ls -la /secrets {{.Env.HOME}}/.secret* ||true'
 	docker run --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose \
 		--start bash -c 'sleep 5 && echo "SERVICE EXITED"' -- \
 		bash -c 'sleep 10 && echo "PRIMARY COMMAND FINISHED"' >/dev/null 2>&1 || true
@@ -132,8 +133,8 @@ run-service-stops-too-soon-test:
 
 
 run-primary-stops-while-service-is-running-test:
-	@echo "\n\nRunning 'run-primary-stops-while-service-is-running-test'"
-	@echo "\tThis should kill the services before they have a chance to finish"
+	@echo -e "\n\nRunning 'run-primary-stops-while-service-is-running-test'"
+	@echo -e "\tThis should kill the services before they have a chance to finish"
 	@echo "################################################################################"
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
@@ -153,8 +154,8 @@ run-primary-stops-while-service-is-running-test:
 
 
 run-before-primary-test:
-	@echo "\n\nrun-before-primary-test:"
-	@echo "\tBefore the service starts, the -run commands should finish in order"
+	@echo -e "\n\nrun-before-primary-test:"
+	@echo -e "\tBefore the service starts, the -run commands should finish in order"
 	@echo "################################################################################"
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
@@ -172,8 +173,8 @@ run-before-primary-test:
 
 
 run-fails-before-primary-test:
-	@echo "\n\nrun-fails-before-primary-test:"
-	@echo "\tIf a --run command fails, the primary command should never start"
+	@echo -e "\n\nrun-fails-before-primary-test:"
+	@echo -e "\tIf a --run command fails, the primary command should never start"
 	@echo "################################################################################"
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
@@ -189,8 +190,8 @@ run-fails-before-primary-test:
 run-primary-service-exits:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
-	@echo "\n\nrun-primary-service-exits:"
-	@echo "\tVerify that when the primary service finishes, the container exits"
+	@echo -e "\n\nrun-primary-service-exits:"
+	@echo -e "\tVerify that when the primary service finishes, the container exits"
 	@echo "################################################################################"
 	docker run --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose echo DONE
 	docker inspect --format '{{ .State.Status }}' test-nginx | egrep -q exited
@@ -202,8 +203,8 @@ run-primary-service-exits:
 run-wait-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
-	@echo "\n\nrun-wait-test:"
-	@echo "\tVerify that when the primary command runs after we wait for something"
+	@echo -e "\n\nrun-wait-test:"
+	@echo -e "\tVerify that when the primary command runs after we wait for something"
 	@echo "################################################################################"
 	docker run --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose \
 		--wait http://amazon.com \
@@ -216,8 +217,8 @@ run-wait-test:
 run-wait-timeout-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
-	@echo "\n\nrun-wait-timeout-test:"
-	@echo "\tVerify that when the primary command does not run if --wait times out"
+	@echo -e "\n\nrun-wait-timeout-test:"
+	@echo -e "\tVerify that when the primary command does not run if --wait times out"
 	@echo "################################################################################"
 	docker run --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose \
 	    --timeout 2s \
@@ -232,8 +233,8 @@ run-wait-timeout-test:
 run-user-option-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
-	@echo "\n\nrun-user-option-test:"
-	@echo "\tVerify that the --user option affects the user account of subsequent commands"
+	@echo -e "\n\nrun-user-option-test:"
+	@echo -e "\tVerify that the --user option affects the user account of subsequent commands"
 	@echo "################################################################################"
 	docker run -e SECRETS_FILES=/secrets/secrets.json:/secrets/secrets.2.json \
 	    --name test-nginx nginx-with-dockerfy-and-zombie-maker \
@@ -268,8 +269,8 @@ run-user-option-test:
 run-option-expansion-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 
-	@echo "\n\nrun-option-expansion-test:"
-	@echo "\tVerify that {{ .Env.VARS }} are expanded before use by dockerfy and \$$VARS are NOT"
+	@echo -e "\n\nrun-option-expansion-test:"
+	@echo -e "\tVerify that {{ .Env.VARS }} are expanded before use by dockerfy and \$$VARS are NOT"
 	@echo "################################################################################"
 	docker run -e SECRETS_FILES=/secrets/secrets.json \
 		-e DB_NAME="My-Db" -e DB_HOST=localhost  \
@@ -297,8 +298,8 @@ run-option-expansion-test:
 
 
 run-exit-code-test:
-	@echo "\n\nrun-exit-code-test:"
-	@echo "\tVerify that dockerfy exits with the exit_code of the failing command"
+	@echo -e "\n\nrun-exit-code-test:"
+	@echo -e "\tVerify that dockerfy exits with the exit_code of the failing command"
 	@echo "################################################################################"
 	docker run --rm nginx-with-dockerfy-and-zombie-maker --verbose \
 		-- bash -c 'exit 5' >/dev/null 2>&1 || [ $$? == 5 ]
@@ -311,8 +312,8 @@ run-exit-code-test:
 
 run-trim-args-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
-	@echo "\n\nrun-trim-args-test:"
-	@echo "\tVerify that dockerfy trims its own args, but not those to --run or --start cmds"
+	@echo -e "\n\nrun-trim-args-test:"
+	@echo -e "\tVerify that dockerfy trims its own args, but not those to --run or --start cmds"
 	@echo "################################################################################"
 	docker run --name test-nginx \
 		-v $(PWD):/secrets  \
@@ -327,14 +328,14 @@ run-trim-args-test:
 
 
 run-template-funcs-test:
-	@echo "\n\nrun-template-funcs-test:"
-	@echo "\tVerify that dockerfy template functions work"
+	@echo -e "\n\nrun-template-funcs-test:"
+	@echo -e "\tVerify that dockerfy template functions work"
 	@echo "################################################################################"
-	@echo "\tgetenv and concat"
-	@dockerfy -- echo '{{ concat "P" "W" "D" | getenv }}' | egrep -q "^$(PWD)$$"
-	@echo "\tsequence"
-	@N=20 dockerfy -- echo '{{ $$N := getenv "N"}}{{range $$i, $$v := sequence "1" $$N}}{{$$v}},{{end}}' \
+	@echo -e "\tgetenv and concat"
+	@../dockerfy -- echo '{{ concat "P" "W" "D" | getenv }}' | egrep -q "^$(PWD)$$"
+	@echo -e "\tsequence"
+	@N=20 ../dockerfy -- echo '{{ $$N := getenv "N"}}{{range $$i, $$v := sequence "1" $$N}}{{$$v}},{{end}}' \
 		| egrep -q '^1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,$$'
-	@echo "\tsplit"
-	@dockerfy -- echo '{{range $$i, $$v := split "a,b,c" ","}}{{$$v}}__{{end}}' | egrep  -q '^a__b__c__$$'
+	@echo -e "\tsplit"
+	@../dockerfy -- echo '{{range $$i, $$v := split "a,b,c" ","}}{{$$v}}__{{end}}' | egrep  -q '^a__b__c__$$'
 	@echo "run-template-funcs-test PASSED"

@@ -12,7 +12,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+    "sync"
 )
+
+// Mutex to protect critical regions when performing file system related activities
+// with possible race conditions such as checking for the existance of directory
+// before creating it.
+var fileSysCreateMutex sync.Mutex
 
 // http://stackoverflow.com/questions/21060945/simple-way-to-copy-a-file-in-golang/21067803#21067803
 // copyFileContents copies the contents of the file named src to the file named
@@ -165,6 +171,9 @@ func copySecretsFiles(cmd *exec.Cmd) error {
 	if _, err := os.Stat("/.dockerenv"); os.IsNotExist(err) {
 		return nil
 	}
+
+    fileSysCreateMutex.Lock()
+    defer fileSysCreateMutex.Unlock()
 
 	cmdUid := os.Getuid()
 	cmdGid := os.Getgid()
