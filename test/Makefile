@@ -3,6 +3,8 @@
 
 TAG:=`git describe --tags`
 
+export SHELL = /bin/bash
+
 build: ../dockerfy .mk.nginx-with-dockerfy-and-zombie-maker
 
 clean:
