@@ -73,7 +73,22 @@ dist/linux/amd64/dockerfy: prereqs Makefile *.go
 	  golang:1.7 go build -ldflags "$(LDFLAGS)" -o dist/linux/amd64/dockerfy
 
 
-release: dist
+is-clean-z-release:
+	echo "TAG=$(TAG)"
+	@{ \
+		if [[ "$(TAG)" =~ .*\-[0-9]+\-g[0-9a-f]+$$ ]]; then \
+		    last_tag=$$(git describe --tags --abbrev=0); \
+	        echo "ERROR: there have been commits on this branch after the $$last_tag tag was created";  \
+	        echo '       please create a fresh GIT Z tag `git tag -a X.Y.Z -m "description ..."`'; \
+	        echo '       or build at an existing TAG instead of on a branch'; \
+	        false; \
+		elif ! [[ "$(TAG)" =~ ^[0-9]+(\.[0-9]+)+.* ]]; then \
+	    	echo "$(TAG) is not a SEMVER Z tag"; \
+	    	false; \
+		fi; \
+	}
+
+release: is-clean-z-release dist
 	mkdir -p dist/release
 	tar -czf dist/release/dockerfy-linux-amd64-$(TAG).tar.gz -C dist/linux/amd64 dockerfy
 	@#tar -czf dist/release/dockerfy-linux-armel-$(TAG).tar.gz -C dist/linux/armel dockerfy
@@ -89,8 +104,8 @@ dist/.mk.nginx-with-dockerfy: Makefile dist/linux/amd64/dockerfy Dockerfile.ngin
 	touch dist/.mk.nginx-with-dockerfy
 
 
-float-tags: nginx-with-dockerfy
-	# fail if we're not on a pure Z tag
+float-tags: is-clean-z-release  nginx-with-dockerfy
+
 	git describe --tags | egrep -q '^[0-9\.]+$$'
 	docker tag socialcode/nginx-with-dockerfy:$(TAG) socialcode/nginx-with-dockerfy:$(YTAG)
 	docker tag socialcode/nginx-with-dockerfy:$(TAG) socialcode/nginx-with-dockerfy:$(XTAG)
