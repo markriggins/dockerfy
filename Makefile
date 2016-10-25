@@ -93,7 +93,7 @@ release: is-clean-z-release dist
 	tar -czf dist/release/dockerfy-linux-amd64-$(TAG).tar.gz -C dist/linux/amd64 dockerfy
 
 publish: release
-	if [ -z "$$GITHUB_TOKEN" ]; then echo "you must export GITHUB_TOKEN"; exit 1; fi
+	#if [ -z "$$GITHUB_TOKEN" ]; then echo "you must export GITHUB_TOKEN"; exit 1; fi
 	hub release create -a dist/release/dockerfy-linux-amd64-$(TAG).tar.gz -m'$(TAG)' $(TAG)
 
 nginx-with-dockerfy:  dist/.mk.nginx-with-dockerfy
