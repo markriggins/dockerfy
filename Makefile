@@ -35,6 +35,7 @@ lint:
 	@glide novendor | xargs -n1 golint
 	@echo
 
+
 is-open-source-clean:
 	@{ \
 		if glide -q list 2>/dev/null | egrep -iq 'github.com/SocialCodeInc'; then \
@@ -43,6 +44,7 @@ is-open-source-clean:
 			echo "Dockerfy is clean for OPEN SOURCE"; \
 		fi; \
 	}
+
 
 dockerfy: prereqs *.go
 	echo "Building dockerfy"
@@ -88,12 +90,15 @@ is-clean-z-release:
 		fi; \
 	}
 
+
 release: is-clean-z-release dist
 	mkdir -p dist/release
 	tar -czf dist/release/dockerfy-linux-amd64-$(TAG).tar.gz -C dist/linux/amd64 dockerfy
 
+
 publish: release
 	hub release create -a dist/release/dockerfy-linux-amd64-$(TAG).tar.gz -m'$(TAG)' $(TAG)
+
 
 nginx-with-dockerfy:  dist/.mk.nginx-with-dockerfy
 
@@ -108,15 +113,19 @@ float-tags: is-clean-z-release  nginx-with-dockerfy
 	docker tag socialcode/nginx-with-dockerfy:$(TAG) socialcode/nginx-with-dockerfy:$(YTAG)
 	docker tag socialcode/nginx-with-dockerfy:$(TAG) socialcode/nginx-with-dockerfy:$(XTAG)
 
+
 push: float-tags
 	docker images | grep nginx-with-dockerfy
 	# pushing the entire repository will push all tagged images
 	docker push socialcode/nginx-with-dockerfy
 
+
 test: fmt lint is-open-source-clean nginx-with-dockerfy
 	cd test && make test
 
+
 test-and-log: fmt lint nginx-with-dockerfy
 	cd test && make test-and-log
+
 
 .PHONY: test
