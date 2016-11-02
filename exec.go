@@ -43,27 +43,42 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, cance
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		select {
-		case sig := <-sigs:
-			if debugFlag {
-				if sig != nil {
-					log.Printf("Command `%s` received signal", toString(cmd))
-				} else {
-					log.Printf("Command `%s` done waiting for signals", toString(cmd))
-				}
-			}
-			//cancel()
-		case <-ctx.Done():
-			if debugFlag {
-				log.Printf("Command `%s` done waiting for signals (ctx.Done())", toString(cmd))
-			}
-			signalProcessWithTimeout(cmd, syscall.SIGTERM)
-			// already cancelled
-		}
+        for {
+            select {
+            case sig, ok := <-sigs:
+                if !ok {
+                    return
+                }
+                if debugFlag {
+                    if sig != nil {
+                        log.Printf("Command `%s` received signal %s", toString(cmd), sig)
+                    } else {
+                        log.Printf("Command `%s` done waiting for signals", toString(cmd))
+                        return
+                    }
+                }
+                if sig == nil {
+                    signalProcessWithTimeout(cmd, syscall.SIGTERM)
+                    signalProcessWithTimeout(cmd, syscall.SIGKILL)
+                    return
+                } else {
+                    // Pass signals thru to children, let them decide how to handle it.
+                    signalProcessWithTimeout(cmd, sig)
+                }
+            case <-ctx.Done():
+                if debugFlag {
+                    log.Printf("Command `%s` done waiting for signals (ctx.Done())", toString(cmd))
+                }
+                signalProcessWithTimeout(cmd, syscall.SIGTERM)
+                signalProcessWithTimeout(cmd, syscall.SIGKILL)
+                return
+            }
+        }
 	}()
 
 	err = cmd.Wait()
-	close(sigs)
+    signal.Stop(sigs)
+    close(sigs)
 
 	if err == nil {
 		if verboseFlag {
@@ -96,7 +111,7 @@ func signalProcessWithTimeout(cmd *exec.Cmd, sig os.Signal) {
 	done := make(chan struct{})
 
 	go func() {
-		cmd.Process.Signal(sig) // pretty sure this doesn't do anything. It seems like the signal is automatically sent to the command?
+		cmd.Process.Signal(sig)
 		cmd.Wait()
 		close(done)
 	}()

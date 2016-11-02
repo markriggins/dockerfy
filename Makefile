@@ -51,6 +51,10 @@ dockerfy: prereqs *.go
 	go build -ldflags '$(LDFLAGS)'
 
 
+install: prereqs *.go
+	echo "Building dockerfy"
+	go install -ldflags '$(LDFLAGS)'
+
 debug: prereqs
 	godebug run  $(ls *.go | egrep -v unix)
 
