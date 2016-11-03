@@ -68,6 +68,12 @@ run-prod-secrets: stop
 	open http://$(shell docker-machine ip $(shell docker-machine active))/secrets.html
 
 
+#########################################################################
+#                     UNIT TESTS                                        #
+#########################################################################
+
+tmpfile := $(shell echo "/tmp/$$RANDOM.out")
+
 test: build
 	@{ \
 		if ! make just-test; then \
@@ -76,6 +82,7 @@ test: build
 			exit 1; \
 		fi; \
 	}
+	@rm -f $(tmpfile)
 
 
 just-test: start-tests run-zombie-test \
@@ -313,6 +320,26 @@ run-exit-code-test:
 	@echo "run-exit-code-test PASSED"
 
 
+run-exit-code-test-with-signals:
+	#
+	#  NOTE:  this test fails so we can't run it.  When a `sleep` is interrupted
+	#         it exits with code 130.  But the golang syscalls for this report -1
+	#
+	@echo -e "\n\nrun-exit-code-test-with-signals:"
+	@echo -e "\tVerify that dockerfy exits with the exit_code of the failing command"
+	@echo "################################################################################"
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
+	docker run -d --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose -- sleep 45678
+	docker exec test-nginx ps -e --format "pid args"
+	docker exec test-nginx bash -c 'ps -e --format "pid args" | egrep "sleep 45678" | egrep -v grep | egrep -v dockerfy | while read pid rest; do kill -2 $$pid; done'
+	sleep 2
+
+	docker logs test-nginx
+	[ $$(docker inspect --format '{{.State.ExitCode}}' test-nginx) == 130 ] || \
+		( echo "Wrong exit code $$(docker inspect --format '{{.State.ExitCode}}' test-nginx) != 130 "; exit 1)
+
+
 run-trim-args-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 	@echo -e "\n\nrun-trim-args-test:"
@@ -344,7 +371,6 @@ run-template-funcs-test:
 	@echo "run-template-funcs-test PASSED"
 
 
-tmpfile := $(shell echo "/tmp/$$RANDOM.out")
 
 run-signal-passing-test:
 	@echo -e "\n\nrun-signal-passing-test: "

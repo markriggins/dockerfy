@@ -297,7 +297,7 @@ func main() {
 		go ReapChildren(ctx, reapPollIntervalFlag)
 	}
 
-	// Process -run flags
+	// Process -start flags
 	for _, cmd := range commands.start {
 		if verboseFlag {
 			log.Printf("Starting Service: `%s`\n", toString(cmd))

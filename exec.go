@@ -89,15 +89,23 @@ func runCmd(ctx context.Context, cancel context.CancelFunc, cmd *exec.Cmd, cance
 		}
 	} else {
 		log.Printf("Command `%s` exited with error: %s\n", toString(cmd), err)
-		if exiterr, ok := err.(*exec.ExitError); ok {
-			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-				if exitCode == 0 {
-					exitCode = status.ExitStatus()
+		if exitCode == 0 {
+			// First child to exit with an error sets the exitCode
+			if exiterr, ok := err.(*exec.ExitError); ok {
+				if waitStatus, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+					exitCode = waitStatus.ExitStatus()
+					if verboseFlag {
+						log.Printf("\tand exit_code %d", exitCode)
+					}
+				} else {
+					log.Printf("Cloud not determine WaitStatus")
 				}
+			} else {
+				log.Printf("Could not determine ExitError")
 			}
+			// If platform-specific exit_code cannot be determined exit with
+			// with generic 1 for failure
 			if exitCode == 0 {
-				// If platform-specific exit_code cannot be determined exit with
-				// with generic 1 for failure
 				exitCode = 1
 			}
 		}
