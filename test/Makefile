@@ -1,6 +1,7 @@
 .PHONY : build run-staging run-prod stop run-proxy-amazon run-prod-secrets
 .PHONY : .zombie-maker-debian-binary
 
+SHELL:=/bin/bash
 TAG:=`git describe --tags`
 
 export SHELL = /bin/bash
@@ -67,6 +68,12 @@ run-prod-secrets: stop
 	open http://$(shell docker-machine ip $(shell docker-machine active))/secrets.html
 
 
+#########################################################################
+#                     UNIT TESTS                                        #
+#########################################################################
+
+tmpfile := $(shell echo "/tmp/$$RANDOM.out")
+
 test: build
 	@{ \
 		if ! make just-test; then \
@@ -75,6 +82,7 @@ test: build
 			exit 1; \
 		fi; \
 	}
+	@rm -f $(tmpfile)
 
 
 just-test: start-tests run-zombie-test \
@@ -83,7 +91,9 @@ just-test: start-tests run-zombie-test \
 	run-before-primary-test run-fails-before-primary-test \
 	run-primary-service-exits run-wait-test \
 	run-user-option-test run-option-expansion-test \
-	run-exit-code-test run-template-funcs-test
+	run-exit-code-test run-template-funcs-test \
+	run-signal-passing-test
+
 	@echo -e "\n\nALL TESTS PASSED"
 
 
@@ -310,6 +320,26 @@ run-exit-code-test:
 	@echo "run-exit-code-test PASSED"
 
 
+run-exit-code-test-with-signals:
+	#
+	#  NOTE:  this test fails so we can't run it.  When a `sleep` is interrupted
+	#         it exits with code 130.  But the golang syscalls for this report -1
+	#
+	@echo -e "\n\nrun-exit-code-test-with-signals:"
+	@echo -e "\tVerify that dockerfy exits with the exit_code of the failing command"
+	@echo "################################################################################"
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
+	docker run -d --name test-nginx nginx-with-dockerfy-and-zombie-maker --verbose -- sleep 45678
+	docker exec test-nginx ps -e --format "pid args"
+	docker exec test-nginx bash -c 'ps -e --format "pid args" | egrep "sleep 45678" | egrep -v grep | egrep -v dockerfy | while read pid rest; do kill -2 $$pid; done'
+	sleep 2
+
+	docker logs test-nginx
+	[ $$(docker inspect --format '{{.State.ExitCode}}' test-nginx) == 130 ] || \
+		( echo "Wrong exit code $$(docker inspect --format '{{.State.ExitCode}}' test-nginx) != 130 "; exit 1)
+
+
 run-trim-args-test:
 	@docker rm -f test-nginx >/dev/null 2>&1 || true
 	@echo -e "\n\nrun-trim-args-test:"
@@ -339,3 +369,40 @@ run-template-funcs-test:
 	@echo -e "\tsplit"
 	@../dockerfy -- echo '{{range $$i, $$v := split "a,b,c" ","}}{{$$v}}__{{end}}' | egrep  -q '^a__b__c__$$'
 	@echo "run-template-funcs-test PASSED"
+
+
+run-signal-passing-test:
+	@echo -e "\n\nrun-signal-passing-test: "
+	@echo -e "\tVerify that dockerfy passes signals to start commands and the primary command"
+	@echo "################################################################################"
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
+	docker run -d --name test-nginx nginx-with-dockerfy-and-zombie-maker --debug \
+		--run echo run-signal-passing-test -- \
+		--start nohup sleep 500 -- \
+		--start nohup sleep 600 -- \
+		nohup sleep 700
+
+	@echo -e "\n\tverify that SIGHUP passes thru to children"
+	@# Send a SIGHUP, which will propagate to the children, but NOT cause them to terminate
+	@# because they are nohup'ed.   NOTE: dockerfy is always PID 1
+	@docker exec test-nginx kill -s SIGHUP 1
+	@sleep 1
+	docker logs test-nginx 2>&1 | egrep -q 'Command `nohup sleep 500` received signal hangup'
+	docker logs test-nginx 2>&1 | egrep -q 'Command `nohup sleep 600` received signal hangup'
+	docker logs test-nginx 2>&1 | egrep -q 'Command `nohup sleep 700` received signal hangup'
+
+
+	@echo -e "\tverify that SIGTERM terminates children"
+	@# Send a SIGTERM, which will propagate to the children, AND cause them to terminate
+	@docker exec test-nginx kill -s SIGTERM 1
+	@sleep 1
+
+	docker logs test-nginx 2>&1 | egrep -q 'Command `nohup sleep 500` exited with error: signal: terminated'
+	docker logs test-nginx 2>&1 | egrep -q 'Command `nohup sleep 600` exited with error: signal: terminated'
+	docker logs test-nginx 2>&1 | egrep -q 'Command `nohup sleep 700` exited with error: signal: terminated'
+
+	[ $$(docker inspect --format '{{.State.Status}}' test-nginx) == "exited" ] || \
+		( echo "dockerfy failed to exit on SIGTERM"; exit 1)
+
+	@echo "run-signal-passing-test PASSED"
