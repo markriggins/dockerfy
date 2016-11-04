@@ -371,39 +371,38 @@ run-template-funcs-test:
 	@echo "run-template-funcs-test PASSED"
 
 
-
 run-signal-passing-test:
 	@echo -e "\n\nrun-signal-passing-test: "
 	@echo -e "\tVerify that dockerfy passes signals to start commands and the primary command"
 	@echo "################################################################################"
-	@-kill  $$(ps | egrep 'dockerfy.*run-signal-passing-test' | egrep -v egrep | cut -d' ' -f1) 2>/dev/null
-	@sleep 1
-	@if ps | egrep -v egrep | egrep -q 'dockerfy.*run-signal-passing-test'; then echo "dockerfy is still running"; exit 1; fi
-	../dockerfy --debug --run echo run-signal-passing-test -- \
-		--start nohup sleep 500 -- --start nohup sleep 600 -- nohup sleep 700 > $(tmpfile) 2>&1 &
+	@docker rm -f test-nginx >/dev/null 2>&1 || true
+
+	docker run -d --name test-nginx nginx-with-dockerfy-and-zombie-maker --debug \
+		--run echo run-signal-passing-test -- \
+		--start nohup sleep 500 -- \
+		--start nohup sleep 600 -- \
+		nohup sleep 700
 
 	@echo -e "\n\tverify that SIGHUP passes thru to children"
 	@# Send a SIGHUP, which will propagate to the children, but NOT cause them to terminate
-	@# because they are nohup'ed
-	@kill -1 $$(ps | egrep 'dockerfy.*run-signal-passing-test' | egrep -v egrep | cut -d' ' -f1)
+	@# because they are nohup'ed.   NOTE: dockerfy is always PID 1
+	@docker exec test-nginx kill -s SIGHUP 1
 	@sleep 1
+	docker logs test-nginx 2>&1 | egrep -q 'Command `nohup sleep 500` received signal hangup'
+	docker logs test-nginx 2>&1 | egrep -q 'Command `nohup sleep 600` received signal hangup'
+	docker logs test-nginx 2>&1 | egrep -q 'Command `nohup sleep 700` received signal hangup'
 
-	@cat $(tmpfile) | egrep -q 'Command `nohup sleep 500` received signal hangup'
-	@cat $(tmpfile) | egrep -q 'Command `nohup sleep 600` received signal hangup'
-	@cat $(tmpfile) | egrep -q 'Command `nohup sleep 700` received signal hangup'
 
 	@echo -e "\tverify that SIGTERM terminates children"
 	@# Send a SIGTERM, which will propagate to the children, AND cause them to terminate
-	@kill $$(ps | egrep 'dockerfy.*run-signal-passing-test' | egrep -v egrep | cut -d' ' -f1)
+	@docker exec test-nginx kill -s SIGTERM 1
 	@sleep 1
 
-	@cat $(tmpfile) | egrep -q 'Command `nohup sleep 500` exited with error: signal: terminated'
-	@cat $(tmpfile) | egrep -q 'Command `nohup sleep 600` exited with error: signal: terminated'
-	@cat $(tmpfile) | egrep -q 'Command `nohup sleep 700` exited with error: signal: terminated'
+	docker logs test-nginx 2>&1 | egrep -q 'Command `nohup sleep 500` exited with error: signal: terminated'
+	docker logs test-nginx 2>&1 | egrep -q 'Command `nohup sleep 600` exited with error: signal: terminated'
+	docker logs test-nginx 2>&1 | egrep -q 'Command `nohup sleep 700` exited with error: signal: terminated'
 
-	@ps | egrep -v grep | egrep -q 'dockerfy.*run-signal-passing-test' && \
-		(echo "dockerfy failed to exit"; exit 1) || true
-	@ps | egrep -v grep | egrep -q 'sleep [567]00' && \
-		(echo "dockerfy's children did not terminate"; exit 1) || true
+	[ $$(docker inspect --format '{{.State.Status}}' test-nginx) == "exited" ] || \
+		( echo "dockerfy failed to exit on SIGTERM"; exit 1)
 
 	@echo "run-signal-passing-test PASSED"
