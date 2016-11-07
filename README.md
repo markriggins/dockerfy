@@ -4,6 +4,8 @@ dockerfy -- Utility to initialize docker containers
 **Dockerfy** is a utility program to initialize and control container applications, and also provide some
 missing OS functionality (such as an init process, and reaping zombies etc.)
 
+### Open Source
+Dockerfy is an open-source project under Apache 2.0 license.  This clone is up to date, but the official source has now moved to [SocialCodeInc/dockerfy](https://github.com/SocialCodeInc/dockerfy/)
 
 ##Key Features
 
